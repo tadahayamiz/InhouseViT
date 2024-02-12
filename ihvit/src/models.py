@@ -91,6 +91,7 @@ class AttentionHead(nn.Module):
         self.hidden_size = hidden_size
         self.attention_head_size = attention_head_size
         # Q, K, Vのprojection layers. ここはbiasの有無を選択できるようにしている
+        ## hiddenをattention_head_sizeに押し込む
         self.query = nn.Linear(hidden_size, attention_head_size, bias=bias)
         self.key = nn.Linear(hidden_size, attention_head_size, bias=bias)
         self.value = nn.Linear(hidden_size, attention_head_size, bias=bias)
@@ -109,6 +110,7 @@ class AttentionHead(nn.Module):
         v = self.value(x)
         # attentionの計算: softmax(Q*K.T/sqrt(head_size))*V
         scores = torch.matmul(q, k.transpose(-1, -2))
+        ## -> (batch, token, token)
         scores = scores / math.sqrt(self.attention_head_size)
         probs = nn.functional.softmax(scores, dim=-1)
         probs = self.dropout(probs) # dropoutかけてる
@@ -144,4 +146,218 @@ class MultiHeadAttention(nn.Module):
         self.output_projection = nn.Linear(self.all_head_size, self.hidden_size)
         self.output_dropout = nn.Dropout(config["hidden_dropout_prob"])
     
-    # 240208ここまで
+    def forward(self, x, output_attentions=False):
+        # 各attention headでattentionの計算
+        attention_outputs = [head(x) for head in self.heads]
+        # attention headを結合
+        attention_output = torch.cat(
+            [attention_output for attention_output, _ in attention_outputs], dim=-1
+            )
+        ## 各attention_outputは(batch, token, att_head)
+        # concat済みのattentionをhidden sizeにproject
+        attention_output = self.output_projection(attention_output)
+        ## (batch, token, all head) -> (batch, token, hidden)
+        attention_output = self.output_dropout(attention_output)
+        # 出力
+        if output_attentions:
+            attention_probs = torch.stack(
+                [attention_probs for _, attention_probs in attention_outputs], dim=-1
+                )
+            # stackに注意, (batch, token, token) -> (batch, token, token, head)?
+            return (attention_output, attention_probs)
+        else:
+            return (attention_output, None)
+    
+
+class FasterMultiHeadAttention(nn.Module):
+    """
+    Multi-head attention with some optimizations
+    
+    """
+    def __init__(self, config):
+        super().__init__()
+        self.hidden_size = config["hidden_size"]
+        self.num_attention_heads = config["num_attention_heads"]
+        self.attention_head_size = self.hidden_size // self.num_attention_heads
+        self.all_head_size = self.num_attention_heads * self.attention_head_size
+        self.qkv_bias = config["qkv_bias"]
+        # Q, K, Vのlinear projection
+        self.qkv_projection = nn.Linear(
+            self.hidden_size, self.all_head_size * 3, bias=self.qkv_bias
+            )
+        self.attn_dropout = nn.Dropout(config["attention_probs_dropout_prob"])
+        # attention outputをhiddenに戻すprojection
+        self.output_projection = nn.Linear(self.all_head_size, self.hidden_size)
+        self.output_dropout = nn.Dropout(config["hidden_dropout_prob"])
+
+    def forward(self, x, output_attentions=False):
+        # Q, K, Vをまとめてlinear projectionする
+        # (batch_size, seq_length, hidden_size)
+        # -> (batch_size, seq_length, all_head_size * 3)
+        qkv = self.qkv_projection(x)
+        # Q, K, Vにprojectionを分割
+        q, k, v = torch.chunk(qkv, 3, dim=-1)
+        # Q, K, Vのresize
+        # -> (batch_size, num_attention_heads, seq_length, attention_head_size)
+        batch_size, seq_length, _ = q.size()
+        q = q.view(
+            batch_size, seq_length, self.num_attention_heads, self.attention_head_size
+            ).transpose(1, 2)
+        k = k.view(
+            batch_size, seq_length, self.num_attention_heads, self.attention_head_size
+        ).transpose(1, 2)
+        v = v.view(
+            batch_size, seq_length, self.num_attention_heads, self.attention_head_size
+        ).transpose(1, 2)
+        # attention scoreの計算
+        attention_scores = torch.matmul(q, k.transpose(-1, -2))
+        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
+        attention_probs = nn.functional.softmax(attention_scores, dim=-1)
+        attention_probs = self.attn_dropout(attention_probs)
+        # attentionの出力を得る
+        attention_output = torch.matmul(attention_probs, v)
+        # attention_otputをresizeする
+        # (batch_size, num_attention_heads, seq_length, attention_head_size)
+        # -> (batch_size, seq_length, all_head_size)
+        attention_output = attention_output.transpose(1, 2).contiguous().view(
+            batch_size, seq_length, self.all_head_size
+            )
+        # attention_outputをhidden sizeに戻す
+        attention_output = self.output_projection(attention_output)
+        attention_output = self.output_dropout(attention_output)
+        if output_attentions:
+            return (attention_output, attention_probs)
+        else:
+            return (attention_output, None)
+    
+
+class MLP(nn.Module):
+    # position-wise feed-forward
+    def __init__(self, config):
+        super().__init__()
+        self.dense1 = nn.Linear(config["hidden_size"], config["intermediate_size"])
+        self.activation = NewGELUActivation()
+        self.dense2 = nn.Linear(config["intermediate_size"], config["hidden_size"])
+        self.dropout = nn.Dropout(config["hidden_dropout_prob"])
+
+    def forward(self, x):
+        x = self.dense1(x)
+        x = self.activation(x)
+        x = self.dense2(x)
+        x = self.dropout(x)
+        return x
+
+
+class Block(nn.Module):
+    """ a single transformer block """
+    def __init__(self, config):
+        super().__init__()
+        self.use_faster_attention = config.get("use_faster_attention", False)
+        if self.use_faster_attention:
+            self.attention = FasterMultiHeadAttention(config)
+        else:
+            self.attention = MultiHeadAttention(config)
+        self.layernorm1 = nn.LayerNorm(config["hidden_size"])
+        self.mlp = MLP(config)
+        self.layernorm2 = nn.LayerNorm(config["hidden_size"])
+    
+    def forward(self, x, output_attentions=False):
+        # self-attention
+        attention_output, attention_probs = self.attention(
+            self.layernorm1(x), output_attentions=output_attentions
+        )
+        ## -> (batch, token, hidden)
+        # skip connection
+        x = x + attention_output
+        # Feed forward
+        mlp_output = self.mlp(self.layernorm2(x))
+        # skip connection
+        x = x + mlp_output
+        if output_attentions:
+            return (x, attention_probs)
+        else:
+            return (x, None)
+
+
+class Encoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        # transformer blockのlist
+        self.blocks = nn.ModuleList([])
+        for _ in range(config["num_hidden_layers"]):
+            block = Block(config)
+            self.blocks.append(block)
+        
+    def forward(self, x, output_attentions=False):
+        # 各ブロックについてblockの出力を得る
+        all_attentions = []
+        for block in self.blocks:
+            x, attention_probs = block(x, output_attentions=output_attentions)
+            # encoderのoutputはblockのoutputに一致, attentionはブロック数出る
+            if output_attentions:
+                all_attentions.append(attention_probs)
+        if output_attentions:
+            ## ブロック数のlistで返る, [(batch, token, token, head), ...] ??
+            return (x, all_attentions)
+        else:
+            return (x, None)
+
+
+class VitForClassification(nn.Module):
+    """ Vit for classification """
+    def __init__(self, config):
+        super().__init__()
+        self.image_size = config["image_size"]
+        self.hidden_size = config["hidden_size"]
+        self.num_classes = config["num_classes"]
+        # embedding module
+        self.embedding = Embeddings(config)
+        # transofer encoder
+        self.encoder = Encoder(config)
+        # encoderの出力を受けた分類器
+        self.classifier = nn.Linear(self.hidden_size, self.num_classes)
+        # weightの初期化
+        # applyはnn.Module由来, module内のインスタンスに対して再帰的に関数を当てる
+        self.apply(self._init_weights)
+    
+    def forward(self, x, output_attentions=False):
+        # embedding
+        embedding_output = self.embedding(x)
+        # encoding
+        encoder_output, all_attentions = self.encoder(
+            embedding_output, output_attentions=output_attentions
+            )
+        # logits
+        # [CLS]のoutputをfeatureに使用, ここは色々ある
+        ## encoder_output (batch, token, hidden)
+        logits = self.classifier(encoder_output[:, 0, :])
+        if output_attentions:
+            return (logits, all_attentions)
+        else:
+            return (logits, None)
+    
+    def _init_weights(self, module):
+        # モジュールごとに適切なものがあるので分ける
+        if isinstance(module, (nn.Linear, nn.Conv2d)):
+            torch.nn.init.normal_(
+                module.weight, mean=0.0, std=self.config["initializer_range"]
+                )
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+        elif isinstance(module, Embeddings):
+            # truncated normalを使ってる
+            module.position_embeddings.data = nn.init.trunc_normal_(
+                module.position_embeddings.data.to(torch.float32),
+                mean=0.0,
+                std=self.config["initializer_range"]
+            ).to(module.position_embeddings.dtype)
+            # CLS token
+            module.cls_token.data = nn.init.trunc_normal_(
+                module.cls_token.data.to(torch.float32),
+                mean=0.0,
+                std=self.config["initializer_range"]
+            ).to(module.position_embeddings.dtype)
+

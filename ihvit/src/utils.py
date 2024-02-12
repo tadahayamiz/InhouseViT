@@ -6,177 +6,162 @@ utils
 
 @author: tadahaya
 """
-
-import os
-from tqdm.auto import tqdm
-import torch
-import torch.nn.functional as F
-
-from tensorboardX import SummaryWriter # tensorboardを使っている
-from torch import Tensor
-from collections import OrderedDict
-
-import matplotlib
-matplotlib.use('Agg') # https://stackoverflow.com/questions/49921721/runtimeerror-main-thread-is-not-in-main-loop-with-matplotlib-and-flask
+import json, os, math
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from torch.nn import functional as F
+import torchvision
+import torchvision.transforms as transforms
 
+from models import VitForClassification
 
-# accuracy.py
-def accuracy(output, target, topk=(1,)):
-    """
-    Computes the accuracy over the k top predictions for the specified values of k
+def save_experiment(
+        experiment_name, config, model, train_losses, test_losses,
+        accuracies, base_dir="experiments"
+        ):
+    outdir = os.path.join(base_dir, experiment_name)
+    os.makedirs(outdir, exist_ok=True)
+    # save config
+    configfile = os.path.join(outdir, 'config.json')
+    with open(configfile, 'w') as f:
+        json.dump(config, f, sort_keys=True, indent=4)
     
-    """
-    with torch.no_grad():
-        maxk = max(topk)
-        batch_size = target.size(0)
-        _, pred = output.topk(maxk, 1, True, True) # 231212 outputが何のインスタンスか
-        correct = pred.eq(target.view(1, -1).expand_as(pred))
-        res = []
-        for k in topk:
-            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-            res.append(correct_k.mul_(100.0 / batch_size)) # 231212 100単位に揃えている
-        return res
+    # save metrics
+    jsonfile = os.path.join(outdir, 'metrics.json')
+    with open(jsonfile, 'w') as f:
+        data = {
+            'train_losses': train_losses,
+            'test_losses': test_losses,
+            'accuracies': accuracies,
+        }
+        json.dump(data, f, sort_keys=True, indent=4)
+    
+    # save the model
+    save_checkpoint(experiment_name, model, "final", base_dir=base_dir)
 
 
-# knn_monitor.py
-# code copied from https://colab.research.google.com/github/facebookresearch/moco/blob/colab-notebook/colab/moco_cifar10_demo.ipynb#scrollTo=RI1Y8bSImD7N
-# test using a knn monitor
-def knn_monitor(net, memory_data_loader, test_data_loader, epoch, k=200, t=0.1, hide_progress=False):
-    net.eval()
-    classes = len(memory_data_loader.dataset.classes) # torchのdatasetでclassesが定義されている必要があるか
-    total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0.0, []
-    with torch.no_grad():
-        # generate feature bank
-        for data, target in tqdm(memory_data_loader, desc="Feature extracting", leave=False, disable=hide_progress):
-            feature = net(data.cuda(non_blocking=True))
-            feature = F.normalize(feature, dim=1) # l2-normalize
-            feature_bank.append(feature)
-        # [D, N]
-        feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
-        # [N]
-        feature_labels = torch.tensor(memory_data_loader.dataset.targets, device=feature_bank.device)
-        # loop test data to predict the label by weighted knn search
-        test_bar = tqdm(test_data_loader, desc="kNN", disable=hide_progress)
-        for data, target in test_bar:
-            data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True) # 高速化か
-            feature = net(data)
-            pred_labels = knn_predict(feature, feature_bank, feature_labels, classes, k, t)
-            total_num += data.size(0)
-            total_top1 += (pred_labels[:, 0] == target).float().sum().item()
-            test_bar.set_postfix({'Accuracy':total_top1 / total_num * 100}) # percentage
-    return total_top1 / total_num * 100
+def save_checkpoint(experiment_name, model, epoch, base_dir="experiments"):
+    outdir = os.path.join(base_dir, experiment_name)
+    os.makedirs(outdir, exist_ok=True)
+    cpfile = os.path.join(outdir, f"model_{epoch}.pt")
+    torch.save(model.state_dict(), cpfile)
 
-# knn monitor as in InstDisc https://arxiv.org/abs/1805.01978
-# implementation follows http://github.com/zhirongw/lemniscate.pytorch and https://github.com/leftthomas/SimCLR
-def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t):
-    # compute cos similarity between each feature vector and feature banck ---> [B, N]
-    sim_matrix = torch.mm(feature, feature_bank)
-    # [B, K]
-    sim_weight, sim_indices = sim_matrix.topk(k=knn_k, dim=-1) # ref torch.topk
-    # [B, K]
-    sim_labels = torch.gather(feature_labels.expand(feature.size(0), -1), dim=-1, index=sim_indices)
-    sim_weight = (sim_weight / knn_t).exp() # 指数的に重み
-    # counts for each class
-    one_hot_label = torch.zeros(feature.size(0) * knn_k, classes, device=sim_labels.device)
-    # [B * K, C]
-    one_hot_label = one_hot_label.scatter(dim=-1, index=sim_labels.view(-1, 1), value=1.0)
-    # weighted score ---> [B, C]
-    pred_scores = torch.sum(
-        one_hot_label.view(feature.size(0), -1, classes) * sim_weight.unsqueeze(dim=-1), dim=1
+
+def load_experiments(
+        experiment_name, checkpoint_name="model_final.pt", base_dir="experiments"
+        ):
+    outdir = os.path.join(base_dir, experiment_name)
+    # load config
+    configfile = os.path.join(outdir, "config.json")
+    with open(configfile, 'r') as f:
+        config = json.load(f)
+    # load metrics
+    jsonfile = os.path.join(outdir, 'metrics.json')
+    with open(jsonfile, 'r') as f:
+        data = json.load(f)
+    train_losses = data["train_losses"]
+    test_losses = data["test_losses"]
+    accuracies = data["accuracies"]
+    # load model
+    model = VitForClassification(config)
+    cpfile = os.path.join(outdir, checkpoint_name)
+    model.load_state_dict(torch.load(cpfile)) # checkpointを読み込んでから
+    return config, model, train_losses, test_losses, accuracies
+
+
+def visualize_images(nrow:int=5, ncol:int=6):
+    trainset = torchvision.datasets.CIFAR10(
+        root="./data", train=True, download=True
+    )
+    classes = (
+        'plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'
         )
-    pred_labels = pred_scores.argsort(dim=-1, descending=True)
-    return pred_labels
-
-
-# average_meter.py
-class AverageMeter():
-    """ Computes and stores the average and current value """
-    def __init__(self, name, fmt=':f'):
-        self.name = name
-        self.fmt = fmt
-        self.log = []
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def reset(self):
-        self.log.append(self.avg)
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+    # randomに選択
+    indices = torch.randperm(len(trainset))[:nrow * ncol]
+    images = [np.asarray(trainset[i][0]) for i in indices]
+    labels = [trainset[i][1] for i in indices]
+    # 描画
+    fig = plt.figure()
+    for i in range(nrow * ncol):
+        ax = fig.add_subplot(ncol, nrow, i+1, xticks=[], yticks=[])
+        ax.imshow(images[i])
+        ax.set_title(classes[labels[i]])
     
-    def __str__(self):
-        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
-        return fmtstr.format(**self.__dict__)
 
-# if __name__ == "__main__":
-#     meter = AverageMeter('sldk')
-#     print(meter.log)
-
-# file_exist_fn.py
-def file_exist_check(file_dir):
-    if os.path.isdir(file_dir):
-        for i in range(2, 1000):
-            if not os.path.isdir(file_dir + f"({i})"):
-                file_dir += f"({i})"
-                break
-    return file_dir
-
-# logger.py
-class Logger(object):
-    def __init__(self, log_dir, tensorboard=True, matplotlib=True):
-        self.reset(log_dir, tensorboard, matplotlib)
+@torch.no_grad()
+def visualize_attention(model, output=None, device="cuda"):
+    """
+    visualize the attention of the first 4 images
     
-    def reset(self, log_dir=None, tensorboard=True, matplotlib=True):
-        if log_dir is not None:
-            self.log_dir = log_dir
-        self.writer = SummaryWriter(log_dir=self.log_dir) if tensorboard else None
-        self.plotter = Plotter if matplotlib else None
-        self.counter = OrderedDict()
+    """
+    model.eval()
+    # randomに選択
+    num_images = 30
+    testset = torchvision.datasets.CIFAR10(root="./data", train=False, download=True)
+    classes = (
+        'plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'
+        )
+    indices = torch.randperm(len(testset))[:30]
+    raw_images = [np.asarray(testset[i][0]) for i in indices]
+    labels = [testset[i][1] for i in indices]
+    # image -> tensor
+    test_transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((32, 32)),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]
+    )
+    images = torch.stack([test_transform(image) for image in raw_images])
+    # imageをdeviceに載せる
+    images = images.to(device)
+    model = model.to(device)
+    # 全ブロックのattention mapを最終ブロックから取得 (appendされてる)
+    logits, attention_maps = model(images, output_attentions=True)
+    ## att_maps = [(batch, token, token, head), ...]
 
-    def update_scalers(self, ordered_dict):
-        for key, value in ordered_dict.items():
-            if isinstance(value, Tensor):
-                ordered_dict[key] = value.item()
-            if self.counter.get(key) is None:
-                self.counter[key] = 1
-            else:
-                self.counter[key] += 1
-            if self.writer:
-                self.writer.add_scaler(key, value, self.counter[key])
-        if self.plotter:
-            self.plotter.update(ordered_dict)
-            self.plotter.save(os.path.join(self.log_dir, "plotter.svg"))
+    # 240213ここまで. この辺りのshapeが不明
 
-class Plotter(object):
-    def __init__(self):
-        self.logger = OrderedDict()
-
-    def update(self, ordered_dict):
-        for key, value in ordered_dict.items():
-            if isinstance(value, Tensor):
-                ordered_dict[key] = value.item()
-            if self.logger.get(key) is None:
-                self.logger[key] = [value]
-            else:
-                self.logger[key].append(value)
-        
-    def save(self, file, **kwargs):
-        fig, axes = plt.subplots(
-            nrows=len(self.logger), ncols=1, figsize=(8, 2 * len(self.logger))
+    # predictionを取得
+    predictions = torch.argmax(logits, dim=1)
+    # attention blockをconcatする
+    attention_maps = torch.cat(attention_maps, dim=1)
+    # CLS tokenのものだけ抽出
+    attention_maps = attention_maps[:, :, 0, 1:]
+    # -> (batch, block, hidden)
+    ## hiddenがなぜ1:？
+    # 全blockについてCLStokenのattention mapsの平均をとる
+    attention_maps = attention_maps.mean(dim=1)
+    # -> (batch, hidden)
+    # attention mapをsquareへ変換
+    num_patches = attention_maps.size(-1) # 最終がtoken=patchになってる？
+    size = int(math.sqrt(num_patches))
+    attention_maps = attention_maps.view(-1, size, size)
+    # attention mapを元の画像サイズに戻す
+    attention_maps = attention_maps.unsqueze(1) # channelをunsqueezeしてから戻す
+    attention_maps = F.interpolate(
+        attention_maps, size=(32, 32), mode="bilinear", align_corners=False
+        )
+    attention_maps = attention_maps.squeeze(1)
+    # 描画
+    fig = plt.figure(figsize=(20, 10))
+    # 2つのimageを用意
+    mask = np.concatenate([np.ones((32, 32)), np.zeros((32, 32))], axis=1)
+    for i in range(num_images):
+        ax = fig.add_subplot(6, 5, i+1, xticks=[], yticks=[])
+        img = np.concatenate((raw_images[i], raw_images[i]), axis=1)
+        ax.imshow(img)
+        # 左側のimageについてattention mapをmask
+        extended_attention_map = np.concatenate(
+            (np.zeros((32, 32)), attention_maps[i].cpu()), axis=1
             )
-        fig.tight_layout()
-        for ax, (key, value) in zip(axes, self.logger.items()):
-            ax.plot(value)
-            ax.set_title(key)
-        plt.savefig(file, **kwargs)
-        plt.close()
+        extended_attention_map = np.ma.masked_where(mask==1, extended_attention_map)
+        ax.imshow(extended_attention_map, alpha=0.5, cmap='jet')
+        # ground truthとpredictedを載せる
+        gt = classes[labels[i]]
+        pred = classes[predictions[i]]
+        ax.set_title(f"gt: {gt} / pred: {pred}", color=("green" if gt==pred else "red"))
+    if output is not None:
+        plt.savefig(output)
+    plt.show()

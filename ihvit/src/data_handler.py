@@ -7,53 +7,50 @@ data handler
 @author: tadahaya
 """
 import torch
-from torch.utils.data import Dataset
-from torchvision import datasets
+import torchvision
+import torchvision.transforms as transforms
 
-# datasets.__init__.py
-def get_dataset(
-        dataset, data_dir, transform, train=True, download=False, debug_subset_size=None
+def prepare_data(
+        batch_size=4, num_workers=2, train_sample_size=None, test_sample_size=None
         ):
-    if dataset == 'mnist':
-        dataset = datasets.MNIST(
-            data_dir, train=train, transform=transform, download=download
-            )
-    elif dataset == "stl10":
-        dataset = datasets.STL10(
-            data_dir, train=train, transform=transform, download=download
+    train_transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((32, 32)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomResizedCrop(
+                (32, 32), scale=(0.8, 1.0),
+                ratio=(0.75, 1.3333), interpolation=2
+            ),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]
+    )
+    trainset = torchvision.datasets.CIFAR10(
+        root="./data", train=True, download=True, transform=train_transform
+    )
+    if train_sample_size is not None:
+        indices = torch.randperm(len(trainset))[:train_sample_size]
+        trainset = torch.utils.data.Subset(trainset, indices)
+    trainloader = torch.utils.data.DataLoader(
+        trainset, batch_size=batch_size, shuffle=True, num_workers=num_workers
         )
-    elif dataset == "cifar10":
-        dataset = datasets.CIFAR10(
-            data_dir, tarin=train, transform=transform, download=download
+    test_transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((32, 32)),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]
+    )
+    testset = torchvision.datasets.CIFAR10(
+        root="./", train=False, download=True, transform=test_transform
         )
-    elif dataset == "cifar100":
-        dataset = datasets.CIFAR100(
-            data_dir, train=train, transform=transform, download=download
+    if test_sample_size is not None:
+        indices = torch.randperm(len(testset))[:test_sample_size]
+        testset = torch.utils.data.Subset(testset, indices)
+    testloader = torch.utils.data.DataLoader(
+        testset, batch_size=batch_size, shuffle=False, num_workers=num_workers
+    )
+    classes = (
+        'plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'
         )
-    elif dataset == "imagenet":
-        dataset = datasets.ImageNet(
-            data_dir, split="train" if train == True else "val",
-            transform=transform, download=download
-        )
-    elif dataset == "random":
-        dataset = RandomDataset()
-    else:
-        raise NotImplementedError
-    return dataset
-
-
-# datasets.random_dataset.py
-class RandomDataset(Dataset):
-    def __init__(self, root=None, train=True, transform=None, target_transform=None):
-        self.transform = transform
-        self.target_transform = target_transform
-        self.size = 1000 # hard??
-
-    def __getitem__(self, idx):
-        if idx < self.size:
-            return [torch.randn((3, 224, 224)), torch.randn((3, 224, 224))], [0, 0, 0]
-        else:
-            raise Exception
-
-    def __len__(self):
-        return self.size
+    return trainloader, testloader, classes
