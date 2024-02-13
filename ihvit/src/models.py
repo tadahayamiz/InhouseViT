@@ -210,6 +210,7 @@ class FasterMultiHeadAttention(nn.Module):
             batch_size, seq_length, self.num_attention_heads, self.attention_head_size
         ).transpose(1, 2)
         # attention scoreの計算
+        # -> (batch, n_heads, token, token)
         attention_scores = torch.matmul(q, k.transpose(-1, -2))
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         attention_probs = nn.functional.softmax(attention_scores, dim=-1)
@@ -297,7 +298,8 @@ class Encoder(nn.Module):
             if output_attentions:
                 all_attentions.append(attention_probs)
         if output_attentions:
-            ## ブロック数のlistで返る, [(batch, token, token, head), ...] ??
+            ## ブロック数のlistで返る, [(batch, head, token, token), ...]
+            ## fasterとそうでないのとで位置が違うように見える
             return (x, all_attentions)
         else:
             return (x, None)

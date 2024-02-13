@@ -119,9 +119,9 @@ def visualize_attention(model, output=None, device="cuda"):
     model = model.to(device)
     # 全ブロックのattention mapを最終ブロックから取得 (appendされてる)
     logits, attention_maps = model(images, output_attentions=True)
-    ## att_maps = [(batch, token, token, head), ...]
+    ## att_maps = [(batch, head, token, token), ...]
 
-    # 240213ここまで. この辺りのshapeが不明
+    # 240214ここまで. この辺りのshapeに注意
 
     # predictionを取得
     predictions = torch.argmax(logits, dim=1)
