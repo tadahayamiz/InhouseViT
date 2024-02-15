@@ -120,22 +120,19 @@ def visualize_attention(model, output=None, device="cuda"):
     # 全ブロックのattention mapを最終ブロックから取得 (appendされてる)
     logits, attention_maps = model(images, output_attentions=True)
     ## att_maps = [(batch, head, token, token), ...]
-
-    # 240214ここまで. この辺りのshapeに注意
-
     # predictionを取得
     predictions = torch.argmax(logits, dim=1)
-    # attention blockをconcatする
+    # attention blockをheadの軸でconcatする
     attention_maps = torch.cat(attention_maps, dim=1)
     # CLS tokenのものだけ抽出
     attention_maps = attention_maps[:, :, 0, 1:]
-    # -> (batch, block, hidden)
-    ## hiddenがなぜ1:？
+    # -> (batch, block, token - 1) = (batch, block, patch)
+    ## cls tokenは先頭なので先頭以外をとってきている
     # 全blockについてCLStokenのattention mapsの平均をとる
     attention_maps = attention_maps.mean(dim=1)
-    # -> (batch, hidden)
+    # -> (batch, patch)
     # attention mapをsquareへ変換
-    num_patches = attention_maps.size(-1) # 最終がtoken=patchになってる？
+    num_patches = attention_maps.size(-1)
     size = int(math.sqrt(num_patches))
     attention_maps = attention_maps.view(-1, size, size)
     # attention mapを元の画像サイズに戻す

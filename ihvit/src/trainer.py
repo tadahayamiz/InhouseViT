@@ -2,103 +2,142 @@
 """
 Created on Tue Jul 23 12:09:08 2019
 
-arguments
+trainer
 
 @author: tadahaya
 """
-
-import os
 import torch
-import numpy as np
-import argparse
-import random
-import re
-import yaml
-import shutil
-import warnings
-from datetime import datetime
+from torch import nn, optim
 
-class NameSpace(object):
-    def __init__(self, somedict):
-        for key, value in somedict.items():
-            assert isinstance(key, str) and re.match("[A-Za-z]_-", key)
-            if isinstance(value, dict):
-                self.__dict__[key] = NameSpace(value) # keyがstrであることを担保
-            else:
-                self.__dict__[key] = value
+from utils import save_experiment, save_checkpoint
+from data_handler import prepare_data
+from models import VitForClassification
+
+config = {
+    "patch_size": 4, # Input image size: 32x32 -> 8x8 patches
+    "hidden_size": 48,
+    "num_hidden_layers": 4,
+    "num_attention_heads": 4,
+    "intermediate_size": 4 * 48, # 4 * hidden_size
+    "hidden_dropout_prob": 0.0,
+    "attention_probs_dropout_prob": 0.0, 
+    "initializer_range": 0.02, 
+    "image_size": 32,
+    "num_classes": 10, # num_classes of CIFAR10
+    "num_channels": 3,
+    "qkv_bias": True,
+    "use_faster_attention": True,
+}
+
+# configの確認
+assert config["hidden_size"] % config["num_attention_heads"] == 0
+assert config["intermediate_size"] == 4 * config["hidden_size"]
+assert config["image_size"] % config["patch_size"] == 0
+
+class Trainer:
+    def __init__(self, model, optimizer, loss_fn, exp_name, device):
+        self.model = model.to(device)
+        self.optimizer = optimizer
+        self.loss_fn = loss_fn
+        self.exp_name = exp_name
+        self.device = device
+
+    def train(self, trainloader, testloader, epochs, save_model_evry_n_epochs=0):
+        """
+        train the model for the specified number of epochs.
         
-    def __getattr__(self, attribute):
-        raise AttributeError(
-            f"Can not find {attribute} in namespace. Write {attribute} in your config file (xxx.yaml)!"
-            )
-        # attributeを直接引けないようにして動線をyamlに絞る
+        """
+        # keep track of the losses and accuracies
+        train_losses, test_losses, accuracies = [], [], []
+        # training
+        for i in range(epochs):
+            train_loss = self.train_epoch(trainloader)
+            accuracy, test_loss = self.evaluate(testloader)
+            train_losses.append(train_loss)
+            test_losses.append(test_loss)
+            accuracies.append(accuracy)
+            print(
+                f"Epoch: {i + 1}, Train_loss: {train_loss:.4f}, Test loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}"
+                )
+            if save_model_evry_n_epochs > 0 and (i + 1) % save_model_evry_n_epochs == 0 and i + 1 != epochs:
+                print("> Save checkpoint at epoch", i + 1)
+                save_checkpoint(self.exp_name, self.model, i + 1)
+        # save the experiment
+        save_experiment(self.exp_name, config, self.model, train_losses, test_losses, accuracies)
 
-
-def set_deterministic(seed):
-    # seed by default is None
-    if seed is not None:
-        print(f"Deterministic with seed = {seed}")
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config_file', required=True, type=str, help="xxx.yaml")
-    parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--debug_subset_size', type=int, default=8)
-    parser.add_argument('--download', action='store_true', help="if can't find dataset, download from web")
-    # なくす
-    parser.add_argument('--data_dir', type=str, default=os.getenv('DATA'))
-    parser.add_argument('--log_dir', type=str, default=os.getenv('LOG'))
-    parser.add_argument('--ckpt_dir', type=str, default=os.getenv('CHECKPOINT'))
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
-    parser.add_argument('--eval_from', type=str, default=None)
-    parser.add_argument('--hide_progress', action='store_true')
-    args = parser.parse_args()
-
-    with open(args.config_file, 'r') as f:
-        for key, value in NameSpace(yaml.load(f, Loader=yaml.FullLoader)).__dict__.items():
-            vars(args)[key] = value # argsの中身取り出す
+    def train_epoch(self, trainloader):
+        """ train the model for one epoch """
+        self.model.train()
+        total_loss = 0
+        for data, label in trainloader:
+            # batchをdeviceへ
+            data, label = data.to(self.device), label.to(self.device)
+            # 勾配を初期化
+            self.optimizer.zero_grad()
+            # forward
+            output = self.model(data)[0] # attentionもNoneで返るので
+            # loss計算
+            loss = self.loss_fn(output, label)
+            # backpropagation
+            loss.backward()
+            # パラメータ更新
+            self.optimizer.step()
+            total_loss += loss.item() * len(data) # loss_fnがbatch内での平均の値になっている模様
+        return total_loss / len(trainloader.dataset) # 全データセットのうちのいくらかという比率になっている
     
-    if args.debug:
-        if args.train:
-            args.train.batch_size = 2
-            args.train.num_epoch = 1
-            args.train.stop_at_epoch = 1
-        if args.eval:
-            args.eval.batch_size = 2
-            args.eval.num_epochs = 1
-        args.dataset.num_workers = 0
+    @torch.no_grad()
+    def evaluate(self, testloader):
+        self.model.eval()
+        total_loss = 0
+        correct = 0
+        with torch.no_grad():
+            for data, label in testloader:
+                # batchをdeviceへ
+                data, label = data.to(self.device), label.to(self.device)
+                # 予測
+                output, _ = self.model(data)
+                # lossの計算
+                loss = self.loss_fn(output, label)
+                total_loss += loss.item() * len(data)
+                # accuracyの計算
+                predictions = torch.argmax(output, dim=1)
+                correct += torch.sum(predictions == label).item()
+        accuracy = correct / len(testloader.dataset)
+        avg_loss = total_loss / len(testloader.dataset)
+        return accuracy, avg_loss
 
-
-    assert not None in [args.log_dir, args.dat_dir, args.ckpt_dir, args.name]       
-
-    args.log_dir = os.path.join(args.log_dir, 'in-progress_'+datetime.now().strftime('%m%d%H%M%S_')+args.name)
-
-    os.makedirs(args.log_dir, exist_ok=False)
-    print(f'creating file {args.log_dir}')
-
-    shutil.copy2(args.config_file, args.log_dir)
-
-    vars(args)['aug_kwargs'] = {
-        'name':args.model.name,
-        'image_size':args.dataset.image_size # 変更予定
-    }
-    vars(args)['dataset_kwargs'] = {
-        'dataset':args.dataset.name,
-        'data_dir':args.data_dir,
-        'download':args.download,
-        'debug_subset_size':args.debug_subset_size if args.debug else None
-    }
-    vars(args)['dataloader_kwargs'] = {
-        'drop_last':True,
-        'pin_memory':True,
-        'num_workers':args.dataset.num_workers
-    }
-
+def parse_args():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exp_name", type=str, required=True)
+    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--lr", type=float, default=1e-2)
+    parser.add_argument("--device", type=str)
+    parser.add_argument("--save_model_every", type=int, default=0)
+    args = parser.parse_args()
+    if args.device is None:
+        args.device = "cuda" if torch.cuda.is_available() else "cpu"
     return args
+
+def main():
+    args = parse_args()
+    # training parameters
+    batch_size = args.batch_size
+    epochs = args.epochs
+    lr = args.lr
+    device = args.device
+    save_model_every_n_epochs = args.save_model_every
+    # dataの読み込み
+    trainloader, testloader, _ = prepare_data(batch_size=batch_size)
+    # モデル等の準備
+    model = VitForClassification(config)
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2) # AdamW使っている
+    loss_fn = nn.CrossEntropyLoss()
+    trainer = Trainer(model, optimizer, loss_fn, args.exp_name, device=device)
+    trainer.train(
+        trainloader, testloader, epochs, save_model_evry_n_epochs=save_model_every_n_epochs
+        )
+
+if __name__ == "__main__":
+    main()

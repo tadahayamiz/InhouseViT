@@ -1,5 +1,7 @@
 # ihvit
-a repository for in-house ViT implementation based on [this repository](https://github.com/google-research/vision_transformer).  
+a repository for in-house ViT implementation based on the followings:  
+- [origin](https://github.com/google-research/vision_transformer)  
+- [scratch](https://github.com/tintn/vision-transformer-from-scratch/tree/main)  
 
 # Note
 This repository is under construction and will be officially released by [Mizuno group](https://github.com/mizuno-group).  
