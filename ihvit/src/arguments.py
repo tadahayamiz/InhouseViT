@@ -3,6 +3,7 @@
 Created on Tue Jul 23 12:09:08 2019
 
 arguments
+※scratch先のrepoにはない
 
 @author: tadahaya
 """

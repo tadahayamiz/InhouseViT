@@ -13,26 +13,24 @@ from utils import save_experiment, save_checkpoint
 from data_handler import prepare_data
 from models import VitForClassification
 
-config = {
-    "patch_size": 4, # Input image size: 32x32 -> 8x8 patches
-    "hidden_size": 48,
-    "num_hidden_layers": 4,
-    "num_attention_heads": 4,
-    "intermediate_size": 4 * 48, # 4 * hidden_size
-    "hidden_dropout_prob": 0.0,
-    "attention_probs_dropout_prob": 0.0, 
-    "initializer_range": 0.02, 
-    "image_size": 32,
-    "num_classes": 10, # num_classes of CIFAR10
-    "num_channels": 3,
-    "qkv_bias": True,
-    "use_faster_attention": True,
-}
 
-# configの確認
-assert config["hidden_size"] % config["num_attention_heads"] == 0
-assert config["intermediate_size"] == 4 * config["hidden_size"]
-assert config["image_size"] % config["patch_size"] == 0
+# configの例
+# config = {
+#     "patch_size": 4, # Input image size: 32x32 -> 8x8 patches
+#     "hidden_size": 48,
+#     "num_hidden_layers": 4,
+#     "num_attention_heads": 4,
+#     "intermediate_size": 4 * 48, # 4 * hidden_size
+#     "hidden_dropout_prob": 0.0,
+#     "attention_probs_dropout_prob": 0.0, 
+#     "initializer_range": 0.02, 
+#     "image_size": 32,
+#     "num_classes": 10, # num_classes of CIFAR10
+#     "num_channels": 3,
+#     "qkv_bias": True,
+#     "use_faster_attention": True,
+# }
+
 
 class Trainer:
     def __init__(self, model, optimizer, loss_fn, exp_name, device):
@@ -42,11 +40,16 @@ class Trainer:
         self.exp_name = exp_name
         self.device = device
 
-    def train(self, trainloader, testloader, epochs, save_model_evry_n_epochs=0):
+
+    def train(self, config, trainloader, testloader, epochs, save_model_evry_n_epochs=0):
         """
         train the model for the specified number of epochs.
         
         """
+        # configの確認
+        assert config["hidden_size"] % config["num_attention_heads"] == 0
+        assert config["intermediate_size"] == 4 * config["hidden_size"]
+        assert config["image_size"] % config["patch_size"] == 0
         # keep track of the losses and accuracies
         train_losses, test_losses, accuracies = [], [], []
         # training
@@ -64,6 +67,7 @@ class Trainer:
                 save_checkpoint(self.exp_name, self.model, i + 1)
         # save the experiment
         save_experiment(self.exp_name, config, self.model, train_losses, test_losses, accuracies)
+
 
     def train_epoch(self, trainloader):
         """ train the model for one epoch """
@@ -85,6 +89,7 @@ class Trainer:
             total_loss += loss.item() * len(data) # loss_fnがbatch内での平均の値になっている模様
         return total_loss / len(trainloader.dataset) # 全データセットのうちのいくらかという比率になっている
     
+
     @torch.no_grad()
     def evaluate(self, testloader):
         self.model.eval()
@@ -105,39 +110,3 @@ class Trainer:
         accuracy = correct / len(testloader.dataset)
         avg_loss = total_loss / len(testloader.dataset)
         return accuracy, avg_loss
-
-def parse_args():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--exp_name", type=str, required=True)
-    parser.add_argument("--batch_size", type=int, default=256)
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--lr", type=float, default=1e-2)
-    parser.add_argument("--device", type=str)
-    parser.add_argument("--save_model_every", type=int, default=0)
-    args = parser.parse_args()
-    if args.device is None:
-        args.device = "cuda" if torch.cuda.is_available() else "cpu"
-    return args
-
-def main():
-    args = parse_args()
-    # training parameters
-    batch_size = args.batch_size
-    epochs = args.epochs
-    lr = args.lr
-    device = args.device
-    save_model_every_n_epochs = args.save_model_every
-    # dataの読み込み
-    trainloader, testloader, _ = prepare_data(batch_size=batch_size)
-    # モデル等の準備
-    model = VitForClassification(config)
-    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2) # AdamW使っている
-    loss_fn = nn.CrossEntropyLoss()
-    trainer = Trainer(model, optimizer, loss_fn, args.exp_name, device=device)
-    trainer.train(
-        trainloader, testloader, epochs, save_model_evry_n_epochs=save_model_every_n_epochs
-        )
-
-if __name__ == "__main__":
-    main()
