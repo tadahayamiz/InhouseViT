@@ -33,7 +33,8 @@ from models import VitForClassification
 
 
 class Trainer:
-    def __init__(self, model, optimizer, loss_fn, exp_name, device):
+    def __init__(self, config, model, optimizer, loss_fn, exp_name, device):
+        self.config = config
         self.model = model.to(device)
         self.optimizer = optimizer
         self.loss_fn = loss_fn
@@ -41,19 +42,20 @@ class Trainer:
         self.device = device
 
 
-    def train(self, config, trainloader, testloader, epochs, save_model_evry_n_epochs=0):
+    def train(self, trainloader, testloader, save_model_evry_n_epochs=0):
         """
         train the model for the specified number of epochs.
         
         """
         # configの確認
+        config = self.config
         assert config["hidden_size"] % config["num_attention_heads"] == 0
         assert config["intermediate_size"] == 4 * config["hidden_size"]
         assert config["image_size"] % config["patch_size"] == 0
         # keep track of the losses and accuracies
         train_losses, test_losses, accuracies = [], [], []
         # training
-        for i in range(epochs):
+        for i in range(config.epochs):
             train_loss = self.train_epoch(trainloader)
             accuracy, test_loss = self.evaluate(testloader)
             train_losses.append(train_loss)
@@ -62,7 +64,7 @@ class Trainer:
             print(
                 f"Epoch: {i + 1}, Train_loss: {train_loss:.4f}, Test loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}"
                 )
-            if save_model_evry_n_epochs > 0 and (i + 1) % save_model_evry_n_epochs == 0 and i + 1 != epochs:
+            if save_model_evry_n_epochs > 0 and (i + 1) % save_model_evry_n_epochs == 0 and i + 1 != config.epochs:
                 print("> Save checkpoint at epoch", i + 1)
                 save_checkpoint(self.exp_name, self.model, i + 1)
         # save the experiment
