@@ -50,7 +50,7 @@ def main():
     loss_fn = nn.CrossEntropyLoss()
     trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
     trainer.train(
-        trainloader, testloader, config["epochs"], save_model_evry_n_epochs=config["save_model_every"]
+        trainloader, testloader, save_model_evry_n_epochs=config["save_model_every"]
         )
 
 
