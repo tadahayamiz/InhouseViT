@@ -55,7 +55,7 @@ class Trainer:
         # keep track of the losses and accuracies
         train_losses, test_losses, accuracies = [], [], []
         # training
-        for i in range(config.epochs):
+        for i in range(config["epochs"]):
             train_loss = self.train_epoch(trainloader)
             accuracy, test_loss = self.evaluate(testloader)
             train_losses.append(train_loss)
@@ -64,7 +64,7 @@ class Trainer:
             print(
                 f"Epoch: {i + 1}, Train_loss: {train_loss:.4f}, Test loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}"
                 )
-            if save_model_evry_n_epochs > 0 and (i + 1) % save_model_evry_n_epochs == 0 and i + 1 != config.epochs:
+            if save_model_evry_n_epochs > 0 and (i + 1) % save_model_evry_n_epochs == 0 and i + 1 != config["epochs"]:
                 print("> Save checkpoint at epoch", i + 1)
                 save_checkpoint(self.exp_name, self.model, i + 1)
         # save the experiment
