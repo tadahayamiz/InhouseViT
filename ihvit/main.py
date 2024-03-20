@@ -19,12 +19,12 @@ import yaml
 
 from tqdm.auto import tqdm
 
-from src.arguments import get_args
-from src.models import *
-from src.utils import save_experiment, load_experiments, visualize_images, visualize_attention
-from src.data_handler import get_dataset
-from src.trainer import Trainer
-from src.data_handler import prepare_data
+from .src.arguments import get_args
+from .src.models import *
+from .src.utils import save_experiment, load_experiments, visualize_images, visualize_attention
+from .src.data_handler import get_dataset
+from .src.trainer import Trainer
+from .src.data_handler import prepare_data
 
 
 def get_args():
