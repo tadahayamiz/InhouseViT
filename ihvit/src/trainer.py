@@ -9,9 +9,9 @@ trainer
 import torch
 from torch import nn, optim
 
-from utils import save_experiment, save_checkpoint
-from data_handler import prepare_data
-from models import VitForClassification
+from .utils import save_experiment, save_checkpoint
+from .data_handler import prepare_data
+from .models import VitForClassification
 
 
 # configの例

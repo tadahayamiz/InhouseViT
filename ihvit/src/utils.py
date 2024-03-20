@@ -14,7 +14,7 @@ from torch.nn import functional as F
 import torchvision
 import torchvision.transforms as transforms
 
-from models import VitForClassification
+from .models import VitForClassification
 
 def save_experiment(
         experiment_name, config, model, train_losses, test_losses,
