@@ -37,7 +37,9 @@ def get_args():
     return args
 
 
-def main(args):
+def main():
+    # argsの取得
+    args = get_args()
     # yamlの読み込み
     with open(args.config_path, "r") as f:
         config = yaml.safe_load(f)
@@ -54,5 +56,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = get_args()
-    main(args)
+    main()
