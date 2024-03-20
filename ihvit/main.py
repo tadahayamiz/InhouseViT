@@ -32,8 +32,6 @@ def get_args():
     parser.add_argument("--config_path", type=str, required=True, help="Yaml file for training")
     parser.add_argument("--exp_name", type=str, required=True)
     args = parser.parse_args()
-    if args.device is None:
-        args.device = "cuda" if torch.cuda.is_available() else "cpu"
     return args
 
 
@@ -43,6 +41,7 @@ def main():
     # yamlの読み込み
     with open(args.config_path, "r") as f:
         config = yaml.safe_load(f)
+    config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
     # dataの読み込み
     trainloader, testloader, _ = prepare_data(batch_size=config.batch_size)
     # モデル等の準備

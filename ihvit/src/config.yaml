@@ -15,5 +15,4 @@ use_faster_attention: true
 batch_size: 256
 epochs: 100
 lr: 0.01
-device: # None
 save_model_every: 0
