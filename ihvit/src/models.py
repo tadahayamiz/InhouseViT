@@ -308,6 +308,7 @@ class VitForClassification(nn.Module):
     """ Vit for classification """
     def __init__(self, config):
         super().__init__()
+        self.config = config
         self.image_size = config["image_size"]
         self.hidden_size = config["hidden_size"]
         self.num_classes = config["num_classes"]
