@@ -18,8 +18,10 @@ from .models import VitForClassification
 
 def save_experiment(
         experiment_name, config, model, train_losses, test_losses,
-        accuracies, base_dir="experiments"
+        accuracies, base_dir=""
         ):
+    if len(base_dir) == 0:
+        base_dir = os.path.dirname(config["config_path"])
     outdir = os.path.join(base_dir, experiment_name)
     os.makedirs(outdir, exist_ok=True)
     # save config

@@ -42,6 +42,8 @@ def main():
     with open(args.config_path, "r") as f:
         config = yaml.safe_load(f)
     config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+    config["config_path"] = args.config_path
+    config["exp_name"] = args.exp_name
     # dataの読み込み
     trainloader, testloader, _ = prepare_data(batch_size=config["batch_size"])
     # モデル等の準備
