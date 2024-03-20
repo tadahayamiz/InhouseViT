@@ -43,12 +43,12 @@ def main():
         config = yaml.safe_load(f)
     config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
     # dataの読み込み
-    trainloader, testloader, _ = prepare_data(batch_size=config.batch_size)
+    trainloader, testloader, _ = prepare_data(batch_size=config["batch_size"])
     # モデル等の準備
     model = VitForClassification(config)
     optimizer = optim.AdamW(model.parameters(), lr=config.lr, weight_decay=1e-2) # AdamW使っている
     loss_fn = nn.CrossEntropyLoss()
-    trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config.device)
+    trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
     trainer.train(
         trainloader, testloader, config.epochs, save_model_evry_n_epochs=config.save_model_every_n_epochs
         )
