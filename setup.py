@@ -16,6 +16,7 @@ setup(
     entry_points={
         "console_scripts": [
             "ihvit=ihvit.main:main",
+            "ihvit.test=ihvit.main:test",
         ]
     },
     classifiers=[
