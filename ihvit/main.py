@@ -58,6 +58,9 @@ def test():
 def main():
     # argsの取得
     args = get_args()
+    # input_pathのチェック
+    if args.input_path is None:
+        raise ValueError("!! Give input_path !!")
     # yamlの読み込み
     with open(args.config_path, "r") as f:
         config = yaml.safe_load(f)
