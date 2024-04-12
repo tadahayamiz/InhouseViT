@@ -123,6 +123,30 @@ def _worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 
+def _default_transform():
+    """ return default transforms """
+    train_transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((32, 32)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomResizedCrop(
+                (32, 32), scale=(0.8, 1.0),
+                ratio=(0.75, 1.3333), interpolation=2
+            ),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]
+    )
+    test_transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((32, 32)),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]
+    )
+    return train_transform, test_transform
+
+
 def prep_data(
     image_path=(None, None), batch_size:int=4,
     transform=(None, None), shuffle=(True, False),
@@ -155,7 +179,10 @@ def prep_data(
         should be True for fast computing    
 
     """
-    # prepare dataset and dataloader
+    # check transform
+    if transform[0] is None:
+        transform = _default_transform()
+    # dataset and dataloader preparation
     train_dataset = prep_dataset(image_path[0], transform[0])
     train_loader = prep_dataloader(
         train_dataset, batch_size, shuffle[0], num_workers, pin_memory
