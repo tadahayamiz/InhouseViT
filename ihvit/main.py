@@ -29,6 +29,7 @@ def get_args():
     parser.add_argument("--config_path", type=str, required=True, help="Yaml file for training")
     parser.add_argument("--exp_name", type=str, required=True)
     parser.add_argument("--input_path", type=str, default=None, help="input data path")
+    parser.add_argument("--input_path2", type=str, default=None, help="input data path, test data")
     args = parser.parse_args()
     return args
 
@@ -56,6 +57,33 @@ def test():
 
 
 def main():
+    # argsの取得
+    args = get_args()
+    # input_pathのチェック
+    if args.input_path is None:
+        raise ValueError("!! Give input_path !!")
+    # yamlの読み込み
+    with open(args.config_path, "r") as f:
+        config = yaml.safe_load(f)
+    config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+    config["config_path"] = args.config_path
+    config["exp_name"] = args.exp_name
+    # dataの読み込み
+    train_loader, test_loader = prep_data(
+        image_path=(args.input_path, args.input_path2), 
+        batch_size=config["batch_size"], transform=(None, None), shuffle=(True, False)
+        )
+    # モデル等の準備
+    model = VitForClassification(config)
+    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-2) # AdamW使っている
+    loss_fn = nn.CrossEntropyLoss()
+    trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
+    trainer.train(
+        train_loader, test_loader, save_model_evry_n_epochs=config["save_model_every"]
+        )
+
+
+def main2():
     # argsの取得
     args = get_args()
     # input_pathのチェック

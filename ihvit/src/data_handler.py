@@ -118,6 +118,36 @@ def prep_dataloader(
     return loader
 
 
+def generate_subset(dataset:torch.utils.data.Dataset, ratio:float=0.1, random_seed:int=0):
+    """
+    generate a subset of the dataset
+    
+    Parameters
+    ----------
+    dataset: torch.utils.data.Dataset
+        the dataset to be subset
+    
+    ratio: float
+        the ratio of the subset to the original dataset
+    
+    random_seed: int
+        the random seed for reproducibility
+    
+    """
+    # set seed
+    np.random.seed(random_seed)
+    random.seed(random_seed)
+    # generate sizes
+    n_samples = len(dataset)
+    size_test = int(n_samples * ratio)
+    size_train = n_samples - size_test
+    # shuffle and split
+    ds_train, ds_test = torch.utils.data.random_split(
+        dataset, [size_train, size_test]
+        )
+    return ds_train, ds_test
+
+
 def _worker_init_fn(worker_id):
     """ fix the seed for each worker """
     np.random.seed(np.random.get_state()[1][0] + worker_id)
@@ -150,7 +180,8 @@ def _default_transform():
 def prep_data(
     image_path=(None, None), batch_size:int=4,
     transform=(None, None), shuffle=(True, False),
-    num_workers:int=2, pin_memory:bool=True
+    num_workers:int=2, pin_memory:bool=True, 
+    ratio:float=0.1, random_seed:int=0
     ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """
     prepare train and test loader from data
@@ -176,24 +207,33 @@ def prep_data(
     
     pin_memory: bool
         determines use of memory pinning
-        should be True for fast computing    
+        should be True for fast computing
 
     """
     # check transform
     if transform[0] is None:
         transform = _default_transform()
     # dataset and dataloader preparation
-    train_dataset = prep_dataset(image_path[0], transform[0])
-    train_loader = prep_dataloader(
-        train_dataset, batch_size, shuffle[0], num_workers, pin_memory
-        )
     if image_path[1] is not None:
+        train_dataset = prep_dataset(image_path[0], transform[0])
+        train_loader = prep_dataloader(
+            train_dataset, batch_size, shuffle[0], num_workers, pin_memory
+            )
         test_dataset = prep_dataset(image_path[1], transform[1])
         test_loader = prep_dataloader(
             test_dataset, batch_size, shuffle[1], num_workers, pin_memory
             )
     else:
-        test_dataset, test_loader = None, None
+        dataset = prep_dataset(image_path[0], transform[0])
+        train_dataset, test_dataset = generate_subset(
+            dataset, ratio, random_seed
+            )
+        train_loader = prep_dataloader(
+            train_dataset, batch_size, shuffle[0], num_workers, pin_memory
+            )
+        test_loader = prep_dataloader(
+            test_dataset, batch_size, shuffle[1], num_workers, pin_memory
+            )
     # classes preparation
     classes = train_dataset.classes
     # label names in string corresponding to 0, 1, ...
