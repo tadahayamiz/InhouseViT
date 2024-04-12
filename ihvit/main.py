@@ -45,7 +45,7 @@ def test():
     config["config_path"] = args.config_path
     config["exp_name"] = args.exp_name
     # dataの読み込み
-    trainloader, testloader, _ = prep_test(batch_size=config["batch_size"])
+    trainloader, testloader, classes = prep_test(batch_size=config["batch_size"])
     # モデル等の準備
     model = VitForClassification(config)
     optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-2) # AdamW使っている
@@ -69,7 +69,7 @@ def main():
     config["config_path"] = args.config_path
     config["exp_name"] = args.exp_name
     # dataの読み込み
-    train_loader, test_loader = prep_data(
+    train_loader, test_loader, classes = prep_data(
         image_path=(args.input_path, args.input_path2), 
         batch_size=config["batch_size"], transform=(None, None), shuffle=(True, False)
         )
