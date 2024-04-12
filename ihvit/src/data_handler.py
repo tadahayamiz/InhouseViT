@@ -6,16 +6,15 @@ data handler
 
 @author: tadahaya
 """
+import random
+import numpy as np
+from typing import Tuple
+
 import torch
 import torchvision
 import torchvision.transforms as transforms
-
+import torchvision.datasets as datasets
 from PIL import Image, ImageOps, ImageFilter
-import torchvision.transforms as transforms
-import random
-
-import numpy as np
-from typing import Tuple
 
 # frozen
 class MyDataset(torch.utils.data.Dataset):
@@ -63,24 +62,23 @@ class MyTransforms:
         return x
 # ToDo: defaultのtransformを設定する
 
-def prep_dataset(input, output, transform=None) -> torch.utils.data.Dataset:
+def prep_dataset(image_path:str, transform=None) -> torch.utils.data.Dataset:
     """
-    prepare dataset from row data
+    prepare dataset using ImageFolder
     
     Parameters
     ----------
-    data: array
-        input data such as np.array
-
-    label: array
-        input labels such as np.array
-        would be None with unsupervised learning
-
+    image_path: str
+        the path to the image folder
+    
     transform: a list of transform functions
         each function should return torch.tensor by __call__ method
     
     """
-    return MyDataset(input, output, transform)
+    mydataset = datasets.ImageFolder(
+        root=image_path, transform=transform
+        )
+    return mydataset
 
 
 def prep_dataloader(
@@ -126,19 +124,18 @@ def _worker_init_fn(worker_id):
 
 
 def prep_data(
-    train_x, train_y, test_x, test_y, batch_size,
+    image_path=(None, None), batch_size:int=4,
     transform=(None, None), shuffle=(True, False),
-    num_workers=2, pin_memory=True
+    num_workers:int=2, pin_memory:bool=True
     ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """
     prepare train and test loader from data
-    combination of prep_dataset and prep_dataloader for model building
     
     Parameters
     ----------
-    train_x, train_y, test_x, test_y: arrays
-        arrays for training data, training labels, test data, and test labels
-    
+    image_path: (str, str)
+        the path to the training and test image folders, respectively
+            
     batch_size: int
         the batch size
 
@@ -158,15 +155,23 @@ def prep_data(
         should be True for fast computing    
 
     """
-    train_dataset = prep_dataset(train_x, train_y, transform[0])
-    test_dataset = prep_dataset(test_x, test_y, transform[1])
+    # prepare dataset and dataloader
+    train_dataset = prep_dataset(image_path[0], transform[0])
     train_loader = prep_dataloader(
         train_dataset, batch_size, shuffle[0], num_workers, pin_memory
         )
-    test_loader = prep_dataloader(
-        test_dataset, batch_size, shuffle[1], num_workers, pin_memory
-        )
-    return train_loader, test_loader
+    if image_path[1] is not None:
+        test_dataset = prep_dataset(image_path[1], transform[1])
+        test_loader = prep_dataloader(
+            test_dataset, batch_size, shuffle[1], num_workers, pin_memory
+            )
+    else:
+        test_dataset, test_loader = None, None
+    # classes preparation
+    classes = train_dataset.classes
+    # label names in string corresponding to 0, 1, ...
+    # the same with class_to_idx
+    return train_loader, test_loader, classes
 
 
 def prep_test(
