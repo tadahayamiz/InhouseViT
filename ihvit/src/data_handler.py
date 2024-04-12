@@ -223,6 +223,8 @@ def prep_data(
         test_loader = prep_dataloader(
             test_dataset, batch_size, shuffle[1], num_workers, pin_memory
             )
+        # class names in string
+        classes = train_dataset.classes
     else:
         dataset = prep_dataset(image_path[0], transform[0])
         train_dataset, test_dataset = generate_subset(
@@ -233,9 +235,9 @@ def prep_data(
             )
         test_loader = prep_dataloader(
             test_dataset, batch_size, shuffle[1], num_workers, pin_memory
-            )
-    # classes preparation
-    classes = train_dataset.classes
+            )    
+        # class names in string
+        classes = dataset.classes
     # label names in string corresponding to 0, 1, ...
     # the same with class_to_idx
     return train_loader, test_loader, classes
