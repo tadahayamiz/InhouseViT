@@ -81,7 +81,9 @@ def main():
     trainer.train(
         train_loader, test_loader, save_model_evry_n_epochs=config["save_model_every"]
         )
-
+    if args.input_path2 is None:
+        accuracy, avg_loss = trainer.evaluate(test_loader)
+        print(f"Accuracy: {accuracy} // Average Loss: {avg_loss}")
 
 def main2():
     # argsの取得
