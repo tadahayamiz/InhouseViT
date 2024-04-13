@@ -24,6 +24,7 @@ def save_experiment(
         base_dir = os.path.dirname(config["config_path"])
     outdir = os.path.join(base_dir, experiment_name)
     os.makedirs(outdir, exist_ok=True)
+
     # save config
     configfile = os.path.join(outdir, 'config.json')
     with open(configfile, 'w') as f:
@@ -38,7 +39,12 @@ def save_experiment(
             'accuracies': accuracies,
         }
         json.dump(data, f, sort_keys=True, indent=4)
-    
+
+    # plot progress
+    plot_progress(
+        experiment_name, train_losses, test_losses, config["epochs"], base_dir=base_dir
+        )
+
     # save the model
     save_checkpoint(experiment_name, model, "final", base_dir=base_dir)
 
@@ -72,6 +78,27 @@ def load_experiments(
     return config, model, train_losses, test_losses, accuracies
 
 
+def plot_progress(
+        experiment_name:str, train_loss:list, test_loss:list, num_epoch:int,
+        base_dir:str="experiments", xlabel="epoch", ylabel="loss"
+        ):
+    """ plot learning progress """
+    outdir = os.path.join(base_dir, experiment_name)
+    os.makedirs(outdir, exist_ok=True)
+    epochs = list(range(1, num_epoch + 1, 1))
+    fig, ax = plt.subplots()
+    plt.rcParams['font.size'] = 14
+    ax.plot(epochs, train_loss, c='navy', label='train')
+    ax.plot(epochs, test_loss, c='darkgoldenrod', label='test')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.grid()
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(outdir + f'/progress_{ylabel}.tif', dpi=300, bbox_inches='tight')
+
+
+# for test CIFAR10 data
 def visualize_images(nrow:int=5, ncol:int=6):
     trainset = torchvision.datasets.CIFAR10(
         root="./data", train=True, download=True

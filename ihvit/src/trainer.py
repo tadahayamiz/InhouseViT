@@ -8,7 +8,7 @@ trainer
 """
 import torch
 
-from .utils import save_experiment, save_checkpoint
+from .utils import save_experiment, save_checkpoint, plot_progress
 
 # configの例
 # config = {
