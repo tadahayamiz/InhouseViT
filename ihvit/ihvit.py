@@ -9,18 +9,17 @@ ihvit module
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.transforms as transforms
+import torchvision.transforms as transforms, datasets
 import numpy as np
 from typing import Tuple
 import yaml
 
 from tqdm.auto import tqdm
 
-from .src.arguments import get_args
 from .src.models import *
-from .src.utils import save_experiment, load_experiments, visualize_images, visualize_attention
+from .src.utils import visualize_images, visualize_attention
 from .src.trainer import Trainer
-from .src.data_handler import prep_data, prep_test
+from .src.data_handler import prep_dataset, prep_data, prep_test
 
 
 class IhVit:
@@ -38,6 +37,41 @@ class IhVit:
         self.model = None
 
 
+    def load_model(self, model_path: str, config_path: str=None):
+        """ モデルの読み込み """
+        if config_path is not None:
+            with open(config_path, "r") as f:
+                self.config = yaml.safe_load(f)
+            self.config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+            self.config["config_path"] = config_path
+        self.model = VitForClassification(self.config)
+        self.model.load_state_dict(torch.load(model_path))
+
+
+    def load_data(self, input_path: str, transform=None):
+        """
+        prepare dataset using ImageFolder
+        
+        Parameters
+        ----------
+        image_path: str
+            the path to the image folder
+        
+        transform: a list of transform functions
+            each function should return torch.tensor by __call__ method
+        
+        """
+        if transform is None:
+            transform = transforms.Compose([
+                transforms.Resize((self.config["image_size"], self.config["image_size"])),
+                transforms.ToTensor()
+            ])
+        mydataset = datasets.ImageFolder(
+            root=input_path, transform=transform
+        )
+        return mydataset
+
+
     def prep_data(
             self, exp_name: str=None, input_path: str=None, input_path2: str=None,
             transform: Tuple[transforms.Compose, transforms.Compose]=(None, None)
@@ -53,9 +87,18 @@ class IhVit:
             batch_size=self.config["batch_size"], transform=transform, shuffle=(True, False)
             )
         return train_loader, test_loader, classes
-         
 
-    def fit(self, train_loader, test_loader=None, classes=None):
+
+    def prep_test(self, exp_name: str=None):
+        """ CIFAR10を使ったテスト用 """
+        if exp_name is None:
+            exp_name = "exp"
+        self.config["exp_name"] = exp_name
+        train_loader, test_loader, classes = prep_test(batch_size=self.config["batch_size"])
+        return train_loader, test_loader, classes
+
+
+    def fit(self, train_loader, test_loader, classes=None):
         """ training """
         # モデル等の準備
         self.model = VitForClassification(self.config)
@@ -64,112 +107,27 @@ class IhVit:
         trainer = Trainer(
             self.config, self.model, optimizer, loss_fn, self.config.exp_name, device=self.config["device"]
             )
+        # training
         trainer.train(
-            train_loader, test_loader, save_model_evry_n_epochs=self.config["save_model_every"]
+            train_loader, test_loader, classes, save_model_evry_n_epochs=self.config["save_model_every"]
             )
         if self.input_path2 is None:
             accuracy, avg_loss = trainer.evaluate(test_loader)
             print(f"Accuracy: {accuracy} // Average Loss: {avg_loss}")
 
 
-    def predict(self, x):
+    def predict(self, data_loader=None):
         """ prediction """
-        pass
+        if data_loader is None:
+            raise ValueError("!! Give data_loader !!")
+        if self.model is None:
+            raise ValueError("!! fit or load_model first !!")
+        self.model.eval()
+        preds = []
+        with torch.no_grad():
+            for data, _ in data_loader:
+                data = data.to(self.config["device"])
+                output = self.model(data)[0]
+                preds.append(output.argmax(dim=1).cpu().numpy())
+        return np.concatenate(preds)
 
-
-def test():
-    """ CIFAR10を使ったテスト用 """
-    # argsの取得
-    args = get_args()
-    # yamlの読み込み
-    with open(args.config_path, "r") as f:
-        config = yaml.safe_load(f)
-    config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
-    config["config_path"] = args.config_path
-    config["exp_name"] = args.exp_name
-    # dataの読み込み
-    trainloader, testloader, classes = prep_test(batch_size=config["batch_size"])
-    # モデル等の準備
-    model = VitForClassification(config)
-    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-2) # AdamW使っている
-    loss_fn = nn.CrossEntropyLoss()
-    trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
-    trainer.train(
-        trainloader, testloader, save_model_evry_n_epochs=config["save_model_every"]
-        )
-
-
-def main():
-    # argsの取得
-    args = get_args()
-    # input_pathのチェック
-    if args.input_path is None:
-        raise ValueError("!! Give input_path !!")
-    # yamlの読み込み
-    with open(args.config_path, "r") as f:
-        config = yaml.safe_load(f)
-    config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
-    config["config_path"] = args.config_path
-    config["exp_name"] = args.exp_name
-
-
-
-def main2():
-    # argsの取得
-    args = get_args()
-    # input_pathのチェック
-    if args.input_path is None:
-        raise ValueError("!! Give input_path !!")
-    # yamlの読み込み
-    with open(args.config_path, "r") as f:
-        config = yaml.safe_load(f)
-    config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
-    config["config_path"] = args.config_path
-    config["exp_name"] = args.exp_name
-    # dataの読み込み
-    # dataの形状を決めて置く
-    # 現状では, data, label, dim
-    dataset = np.load(args.input_path, allow_pickle=True)
-    data = dataset["data"]
-    label = dataset["label"]
-    dim = dataset["dim"]
-    idx = int(input.shape[0] * 0.9)
-    input = np.transpose(input, [0,3,1,2]) # nhwc -> nchw
-    output = np.transpose(output, [0,3,1,2]) # nhwc -> nchw
-    input = torch.tensor(input).float()
-    output = torch.tensor(output).float()
-    tfn_train, tfn_test = None, None # Noneで初期化
-    if dim == 1:
-        tfn_train = transforms.Compose([
-            transforms.RandomAffine(degrees=0, translate=(0.1, 0.0), fill=255),
-            transforms.GaussianBlur(kernel_size=3, sigma=(1.0, 2.0))
-            ])
-        tfn_test = transforms.Compose([
-            transforms.GaussianBlur(kernel_size=3, sigma=1.0)
-            ])
-        # 1Dの場合はx軸方向のみ不変
-    elif dim == 2:
-        tfn_train = transforms.Compose([
-            transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), fill=255),
-            transforms.GaussianBlur(kernel_size=3, sigma=(1.0, 2.0))
-            ])
-        tfn_test = transforms.Compose([
-            transforms.GaussianBlur(kernel_size=3, sigma=1.0)
-            ])
-        # 2Dの場合はx,y両方不変
-    train_loader, test_loader = prep_data(
-        data[:idx], label[:idx], data[idx:], label[idx:],
-        batch_size=config["batch_size"], transform=(tfn_train, tfn_test)
-        )
-    # モデル等の準備
-    model = VitForClassification(config)
-    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-2) # AdamW使っている
-    loss_fn = nn.CrossEntropyLoss()
-    trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
-    trainer.train(
-        train_loader, test_loader, save_model_evry_n_epochs=config["save_model_every"]
-        )
-
-
-if __name__ == "__main__":
-    main()

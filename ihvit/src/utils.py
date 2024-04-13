@@ -101,8 +101,100 @@ def plot_progress(
     plt.savefig(outdir + f'/progress_{ylabel}.tif', dpi=300, bbox_inches='tight')
 
 
+def visualize_images(mydataset, nrow:int=5, ncol:int=6):
+    classes = mydataset.classes
+    # randomに選択
+    indices = torch.randperm(len(mydataset))[:nrow * ncol]
+    images = [np.asarray(mydataset[i][0]) for i in indices]
+    labels = [mydataset[i][1] for i in indices]
+    # 描画
+    fig = plt.figure()
+    for i in range(nrow * ncol):
+        ax = fig.add_subplot(ncol, nrow, i+1, xticks=[], yticks=[])
+        ax.imshow(images[i])
+        ax.set_title(classes[labels[i]])
+    
+
+@torch.no_grad()
+def visualize_attention(
+    model, mydataset, config, nrow:int=2, ncol:int=3, output=None, device="cuda"
+    ):
+    """
+    visualize the attention of the first 4 images
+    
+    """
+    model.eval()
+    # randomに選択
+    num_images = nrow * ncol
+    classes = mydataset.classes
+    indices = torch.randperm(len(mydataset))[:num_images]
+    raw_images = [np.asarray(mydataset[i][0]) for i in indices]
+    labels = [mydataset[i][1] for i in indices]
+    # image -> tensor
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((config["image_size"], config["image_size"])),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]
+    )
+    images = torch.stack([transform(image) for image in raw_images])
+    # imageをdeviceに載せる
+    images = images.to(device)
+    model = model.to(device)
+    # 全ブロックのattention mapを最終ブロックから取得 (appendされてる)
+    logits, attention_maps = model(images, output_attentions=True)
+    ## att_maps = [(batch, head, token, token), ...]
+    # predictionを取得
+    predictions = torch.argmax(logits, dim=1)
+    # attention blockをheadの軸でconcatする
+    attention_maps = torch.cat(attention_maps, dim=1)
+    # CLS tokenのものだけ抽出
+    attention_maps = attention_maps[:, :, 0, 1:]
+    # -> (batch, block, token - 1) = (batch, block, patch)
+    ## cls tokenは先頭なので先頭以外をとってきている
+    # 全blockについてCLStokenのattention mapsの平均をとる
+    attention_maps = attention_maps.mean(dim=1)
+    # -> (batch, patch)
+    # attention mapをsquareへ変換
+    num_patches = attention_maps.size(-1)
+    size = int(math.sqrt(num_patches))
+    attention_maps = attention_maps.view(-1, size, size)
+    # attention mapを元の画像サイズに戻す
+    attention_maps = attention_maps.unsqueze(1) # channelをunsqueezeしてから戻す
+    attention_maps = F.interpolate(
+        attention_maps, size=(config["image_size"], config["image_size"]),
+        mode="bilinear", align_corners=False
+        )
+    attention_maps = attention_maps.squeeze(1)
+    # 描画
+    fig = plt.figure(figsize=(20, 10))
+    # 2つのimageを用意
+    mask = np.concatenate(
+        [np.ones((config["image_size"], config["image_size"])), np.zeros((config["image_size"], config["image_size"]))],
+        axis=1
+        )
+    for i in range(num_images):
+        ax = fig.add_subplot(nrow, ncol, i+1, xticks=[], yticks=[])
+        img = np.concatenate((raw_images[i], raw_images[i]), axis=1)
+        ax.imshow(img)
+        # 左側のimageについてattention mapをmask
+        extended_attention_map = np.concatenate(
+            (np.zeros((config["image_size"], config["image_size"])), attention_maps[i].cpu()), axis=1
+            )
+        extended_attention_map = np.ma.masked_where(mask==1, extended_attention_map)
+        ax.imshow(extended_attention_map, alpha=0.5, cmap='jet')
+        # ground truthとpredictedを載せる
+        gt = classes[labels[i]]
+        pred = classes[predictions[i]]
+        ax.set_title(f"gt: {gt} / pred: {pred}", color=("green" if gt==pred else "tomato"))
+    if output is not None:
+        plt.savefig(output)
+    plt.show()
+
+
 # for test CIFAR10 data
-def visualize_images(nrow:int=5, ncol:int=6):
+def visualize_images_test(nrow:int=5, ncol:int=6):
     trainset = torchvision.datasets.CIFAR10(
         root="./data", train=True, download=True
     )
@@ -122,7 +214,7 @@ def visualize_images(nrow:int=5, ncol:int=6):
     
 
 @torch.no_grad()
-def visualize_attention(model, output=None, device="cuda"):
+def visualize_attention_test(model, output=None, device="cuda"):
     """
     visualize the attention of the first 4 images
     
