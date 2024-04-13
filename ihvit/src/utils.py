@@ -18,8 +18,9 @@ from .models import VitForClassification
 
 def save_experiment(
         experiment_name, config, model, train_losses, test_losses,
-        accuracies, base_dir=""
+        accuracies, classes, base_dir=""
         ):
+    """ save the experiment: config, model, metrics, and progress plot """
     if len(base_dir) == 0:
         base_dir = os.path.dirname(config["config_path"])
     outdir = os.path.join(base_dir, experiment_name)
@@ -37,6 +38,7 @@ def save_experiment(
             'train_losses': train_losses,
             'test_losses': test_losses,
             'accuracies': accuracies,
+            'classes': classes,
         }
         json.dump(data, f, sort_keys=True, indent=4)
 
@@ -71,11 +73,12 @@ def load_experiments(
     train_losses = data["train_losses"]
     test_losses = data["test_losses"]
     accuracies = data["accuracies"]
+    classes = data["classes"]
     # load model
     model = VitForClassification(config)
     cpfile = os.path.join(outdir, checkpoint_name)
     model.load_state_dict(torch.load(cpfile)) # checkpointを読み込んでから
-    return config, model, train_losses, test_losses, accuracies
+    return config, model, train_losses, test_losses, accuracies, classes
 
 
 def plot_progress(

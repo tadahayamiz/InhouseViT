@@ -236,10 +236,8 @@ def prep_data(
         test_loader = prep_dataloader(
             test_dataset, batch_size, shuffle[1], num_workers, pin_memory
             )    
-        # class names in string
-        classes = dataset.classes
-    # label names in string corresponding to 0, 1, ...
-    # the same with class_to_idx
+        # class name dict
+        classes = dataset.class_to_idx
     return train_loader, test_loader, classes
 
 
@@ -284,7 +282,5 @@ def prep_test(
     testloader = torch.utils.data.DataLoader(
         testset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
-    classes = (
-        'plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'
-        )
+    classes = trainset.class_to_idx
     return trainloader, testloader, classes

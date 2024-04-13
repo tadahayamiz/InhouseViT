@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 import numpy as np
-import argparse
+from typing import Tuple
 import yaml
 
 from tqdm.auto import tqdm
@@ -23,15 +23,58 @@ from .src.trainer import Trainer
 from .src.data_handler import prep_data, prep_test
 
 
-def get_args():
-    """ 引数の取得 """
-    parser = argparse.ArgumentParser(description="Yaml file for training")
-    parser.add_argument("--config_path", type=str, required=True, help="Yaml file for training")
-    parser.add_argument("--exp_name", type=str, required=True)
-    parser.add_argument("--input_path", type=str, default=None, help="input data path")
-    parser.add_argument("--input_path2", type=str, default=None, help="input data path, test data")
-    args = parser.parse_args()
-    return args
+class IhVit:
+    """ IhVitをモジュールとして使うためのクラス """
+    def __init__(
+            self, config_path: str
+            ):
+        # configの読み込み
+        with open(config_path, "r") as f:
+            self.config = yaml.safe_load(f)
+        self.config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+        self.config["config_path"] = config_path
+        self.input_path = None
+        self.input_path2 = None
+        self.model = None
+
+
+    def prep_data(
+            self, exp_name: str=None, input_path: str=None, input_path2: str=None,
+            transform: Tuple[transforms.Compose, transforms.Compose]=(None, None)
+            ):
+        """ dataの読み込み """
+        if exp_name is None:
+            exp_name = "exp"
+        self.config["exp_name"] = exp_name
+        self.input_path = input_path
+        self.input_path2 = input_path2
+        train_loader, test_loader, classes = prep_data(
+            image_path=(input_path, input_path2), 
+            batch_size=self.config["batch_size"], transform=transform, shuffle=(True, False)
+            )
+        return train_loader, test_loader, classes
+         
+
+    def fit(self, train_loader, test_loader=None, classes=None):
+        """ training """
+        # モデル等の準備
+        self.model = VitForClassification(self.config)
+        optimizer = optim.AdamW(self.model.parameters(), lr=self.config["lr"], weight_decay=1e-2)
+        loss_fn = nn.CrossEntropyLoss()
+        trainer = Trainer(
+            self.config, self.model, optimizer, loss_fn, self.config.exp_name, device=self.config["device"]
+            )
+        trainer.train(
+            train_loader, test_loader, save_model_evry_n_epochs=self.config["save_model_every"]
+            )
+        if self.input_path2 is None:
+            accuracy, avg_loss = trainer.evaluate(test_loader)
+            print(f"Accuracy: {accuracy} // Average Loss: {avg_loss}")
+
+
+    def predict(self, x):
+        """ prediction """
+        pass
 
 
 def test():
@@ -68,22 +111,7 @@ def main():
     config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
     config["config_path"] = args.config_path
     config["exp_name"] = args.exp_name
-    # dataの読み込み
-    train_loader, test_loader, classes = prep_data(
-        image_path=(args.input_path, args.input_path2), 
-        batch_size=config["batch_size"], transform=(None, None), shuffle=(True, False)
-        )
-    # モデル等の準備
-    model = VitForClassification(config)
-    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=1e-2) # AdamW使っている
-    loss_fn = nn.CrossEntropyLoss()
-    trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
-    trainer.train(
-        train_loader, test_loader, save_model_evry_n_epochs=config["save_model_every"]
-        )
-    if args.input_path2 is None:
-        accuracy, avg_loss = trainer.evaluate(test_loader)
-        print(f"Accuracy: {accuracy} // Average Loss: {avg_loss}")
+
 
 
 def main2():

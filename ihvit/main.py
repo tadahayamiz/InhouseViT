@@ -52,7 +52,7 @@ def test():
     loss_fn = nn.CrossEntropyLoss()
     trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
     trainer.train(
-        trainloader, testloader, save_model_evry_n_epochs=config["save_model_every"]
+        trainloader, testloader, classes, save_model_evry_n_epochs=config["save_model_every"]
         )
 
 
@@ -79,7 +79,7 @@ def main():
     loss_fn = nn.CrossEntropyLoss()
     trainer = Trainer(config, model, optimizer, loss_fn, args.exp_name, device=config["device"])
     trainer.train(
-        train_loader, test_loader, save_model_evry_n_epochs=config["save_model_every"]
+        train_loader, test_loader, classes, save_model_evry_n_epochs=config["save_model_every"]
         )
     if args.input_path2 is None:
         accuracy, avg_loss = trainer.evaluate(test_loader)

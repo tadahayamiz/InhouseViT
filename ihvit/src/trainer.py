@@ -38,7 +38,7 @@ class Trainer:
         self.device = device
 
 
-    def train(self, trainloader, testloader, save_model_evry_n_epochs=0):
+    def train(self, trainloader, testloader, classes:dict=None, save_model_evry_n_epochs=0):
         """
         train the model for the specified number of epochs.
         
@@ -64,7 +64,9 @@ class Trainer:
                 print("> Save checkpoint at epoch", i + 1)
                 save_checkpoint(self.exp_name, self.model, i + 1)
         # save the experiment
-        save_experiment(self.exp_name, config, self.model, train_losses, test_losses, accuracies)
+        save_experiment(
+            self.exp_name, config, self.model, train_losses, test_losses, accuracies, classes
+            )
 
 
     def train_epoch(self, trainloader):
