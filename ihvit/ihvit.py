@@ -131,3 +131,24 @@ class IhVit:
                 preds.append(output.argmax(dim=1).cpu().numpy())
         return np.concatenate(preds)
 
+
+    # ToDo: これらをテストする
+    def check_images(self):
+        """ check images """
+        if self.input_path is None:
+            raise ValueError("!! Give input_path !!")
+        visualize_images(self.input_path)
+
+
+    def get_attention(self):
+        """ get attention """
+        if self.input_path is None:
+            raise ValueError("!! Give input_path !!")
+        if self.model is None:
+            raise ValueError("!! fit or load_model first !!")
+        self.model.eval()
+        with torch.no_grad():
+            for data, _ in tqdm(test_loader):
+                data = data.to(self.config["device"])
+                _, attn = self.model(data)
+                visualize_attention(data, attn)
