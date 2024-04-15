@@ -174,7 +174,7 @@ def visualize_attention(
     size = int(math.sqrt(num_patches))
     attention_maps = attention_maps.view(-1, size, size)
     # attention mapを元の画像サイズに戻す
-    attention_maps = attention_maps.unsqueze(1) # channelをunsqueezeしてから戻す
+    attention_maps = attention_maps.unsqueeze(1) # channelをunsqueezeしてから戻す
     attention_maps = F.interpolate(
         attention_maps, size=(config["image_size"], config["image_size"]),
         mode="bilinear", align_corners=False
@@ -187,7 +187,7 @@ def visualize_attention(
         [np.ones((config["image_size"], config["image_size"])), np.zeros((config["image_size"], config["image_size"]))],
         axis=1
         )
-    for i in range(num_images):
+    for i in range(num_vis):
         ax = fig.add_subplot(nrow, ncol, i+1, xticks=[], yticks=[])
         img = np.concatenate((raw_images[i], raw_images[i]), axis=1)
         ax.imshow(img)
@@ -273,7 +273,7 @@ def visualize_attention_test(model, output=None, device="cuda"):
     size = int(math.sqrt(num_patches))
     attention_maps = attention_maps.view(-1, size, size)
     # attention mapを元の画像サイズに戻す
-    attention_maps = attention_maps.unsqueze(1) # channelをunsqueezeしてから戻す
+    attention_maps = attention_maps.unsqueeze(1) # channelをunsqueezeしてから戻す
     attention_maps = F.interpolate(
         attention_maps, size=(32, 32), mode="bilinear", align_corners=False
         )
