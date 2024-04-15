@@ -101,33 +101,46 @@ def plot_progress(
     plt.savefig(outdir + f'/progress_{ylabel}.tif', dpi=300, bbox_inches='tight')
 
 
-def visualize_images(mydataset, nrow:int=5, ncol:int=6):
+def visualize_images(mydataset, nrow:int=3, ncol:int=4, output:str="", indices:list=[]):
+    """
+    visualize the images in the given dataset
+    
+    """
+    # indicesの準備
+    assert len(indices) <= len(mydataset), "!! indices should be less than the total number of images !!"
+    num_vis = np.min((len(mydataset), nrow * ncol))
+    if len(indices) == 0:
+        indices = torch.randperm(len(mydataset))[:num_vis]
     classes = mydataset.classes
-    # randomに選択
-    indices = torch.randperm(len(mydataset))[:nrow * ncol]
     images = [np.asarray(mydataset[i][0]) for i in indices]
     labels = [mydataset[i][1] for i in indices]
     # 描画
     fig = plt.figure()
-    for i in range(nrow * ncol):
+    for i in range(num_vis):
         ax = fig.add_subplot(ncol, nrow, i+1, xticks=[], yticks=[])
         ax.imshow(images[i])
         ax.set_title(classes[labels[i]])
-    
+    plt.tight_layout()
+    if len(output) > 0:
+        plt.savefig(output, dpi=300, bbox_inches='tight')
+
 
 @torch.no_grad()
 def visualize_attention(
-    model, mydataset, config, nrow:int=2, ncol:int=3, output=None, device="cuda"
+    model, mydataset, config, nrow:int=2, ncol:int=3,
+    indices:list=list, output:str="", device="cuda"
     ):
     """
     visualize the attention of the first 4 images
     
     """
     model.eval()
-    # randomに選択
-    num_images = nrow * ncol
+    # indicesの準備
+    assert len(indices) <= len(mydataset), "!! indices should be less than the total number of images !!"
+    num_vis = np.min((len(mydataset), nrow * ncol))
+    if len(indices) == 0:
+        indices = torch.randperm(len(mydataset))[:num_vis]
     classes = mydataset.classes
-    indices = torch.randperm(len(mydataset))[:num_images]
     raw_images = [np.asarray(mydataset[i][0]) for i in indices]
     labels = [mydataset[i][1] for i in indices]
     # image -> tensor
@@ -188,8 +201,8 @@ def visualize_attention(
         gt = classes[labels[i]]
         pred = classes[predictions[i]]
         ax.set_title(f"gt: {gt} / pred: {pred}", color=("green" if gt==pred else "tomato"))
-    if output is not None:
-        plt.savefig(output)
+    if len(output) > 0:
+        plt.savefig(output, dpi=300, bbox_inches='tight')
     plt.show()
 
 
