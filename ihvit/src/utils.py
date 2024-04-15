@@ -131,7 +131,7 @@ def visualize_attention(
     indices:list=list, output:str="", device="cuda"
     ):
     """
-    visualize the attention of the first 4 images
+    visualize the attention of the images in the given dataset
     
     """
     model.eval()

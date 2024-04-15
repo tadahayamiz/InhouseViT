@@ -133,22 +133,27 @@ class IhVit:
 
 
     # ToDo: これらをテストする
-    def check_images(self):
+    def check_images(self, nrow:int=3, ncol:int=4, indices:list=[], output:str=""):
         """ check images """
         if self.input_path is None:
             raise ValueError("!! Give input_path !!")
-        visualize_images(self.input_path)
+        mydataset = prep_dataset(self.input_path)
+        visualize_images(mydataset, nrow, ncol, indices, output)
+ 
 
-
-    def get_attention(self):
-        """ get attention """
+    def get_attention(
+        self, nrow:int=2, ncol:int=3,
+        indices:list=list, output:str="", device="cuda"
+        ):
+        """
+        visualize the attention of the images in the given dataset
+        
+        """
         if self.input_path is None:
             raise ValueError("!! Give input_path !!")
+        mydataset = prep_dataset(self.input_path)
         if self.model is None:
             raise ValueError("!! fit or load_model first !!")
-        self.model.eval()
-        with torch.no_grad():
-            for data, _ in tqdm(test_loader):
-                data = data.to(self.config["device"])
-                _, attn = self.model(data)
-                visualize_attention(data, attn)
+        visualize_attention(
+            self.model, mydataset, self.config, nrow, ncol, indices, output, device
+            )
