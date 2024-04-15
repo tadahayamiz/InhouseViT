@@ -133,7 +133,6 @@ class IhVit:
         return np.concatenate(preds)
 
 
-    # ToDo: これらをテストする
     def check_images(self, nrow:int=3, ncol:int=4, indices:list=[], output:str=""):
         """ check images """
         if self.input_path is None:
@@ -142,8 +141,8 @@ class IhVit:
         visualize_images(mydataset, nrow, ncol, indices, output)
  
 
-    def get_attention(
-        self, nrow:int=2, ncol:int=3, indices:list=list, output:str=""
+    def get_attentions(
+        self, nrow:int=2, ncol:int=3, indices:list=[], output:str=""
         ):
         """
         visualize the attention of the images in the given dataset
