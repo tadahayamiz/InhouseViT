@@ -106,7 +106,7 @@ class IhVit:
         optimizer = optim.AdamW(self.model.parameters(), lr=self.config["lr"], weight_decay=1e-2)
         loss_fn = nn.CrossEntropyLoss()
         trainer = Trainer(
-            self.config, self.model, optimizer, loss_fn, self.config.exp_name, device=self.config["device"]
+            self.config, self.model, optimizer, loss_fn, self.config["exp_name"], device=self.config["device"]
             )
         # training
         trainer.train(
