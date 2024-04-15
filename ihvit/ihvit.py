@@ -142,8 +142,7 @@ class IhVit:
  
 
     def get_attention(
-        self, nrow:int=2, ncol:int=3,
-        indices:list=list, output:str="", device="cuda"
+        self, nrow:int=2, ncol:int=3, indices:list=list, output:str=""
         ):
         """
         visualize the attention of the images in the given dataset
@@ -155,5 +154,6 @@ class IhVit:
         if self.model is None:
             raise ValueError("!! fit or load_model first !!")
         visualize_attention(
-            self.model, mydataset, self.config, nrow, ncol, indices, output, device
+            self.model, mydataset, self.config, nrow, ncol,
+            indices, output, self.config["device"]
             )
