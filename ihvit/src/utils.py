@@ -119,7 +119,7 @@ def visualize_images(mydataset, indices:list=[], output:str="", nrow:int=3, ncol
     # 描画
     fig = plt.figure()
     for i in range(num_vis):
-        ax = fig.add_subplot(ncol, nrow, i+1, xticks=[], yticks=[])
+        ax = fig.add_subplot(nrow, ncol, i+1, xticks=[], yticks=[])
         ax.imshow(images[i])
         ax.set_title(classes[labels[i]])
     plt.tight_layout()
