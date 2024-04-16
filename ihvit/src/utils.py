@@ -111,6 +111,8 @@ def visualize_images(mydataset, indices:list=[], output:str="", nrow:int=3, ncol
     num_vis = np.min((len(mydataset), nrow * ncol))
     if len(indices) == 0:
         indices = torch.randperm(len(mydataset))[:num_vis]
+    else:
+        num_vis = len(indices)
     classes = mydataset.classes
     images = [np.asarray(mydataset[i][0]) for i in indices]
     labels = [mydataset[i][1] for i in indices]
@@ -140,6 +142,8 @@ def visualize_attention(
     num_vis = np.min((len(mydataset), nrow * ncol))
     if len(indices) == 0:
         indices = torch.randperm(len(mydataset))[:num_vis]
+    else:
+        num_vis = len(indices)
     classes = mydataset.classes
     raw_images = [np.asarray(mydataset[i][0]) for i in indices]
     labels = [mydataset[i][1] for i in indices]
