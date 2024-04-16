@@ -2,6 +2,7 @@
 a repository for in-house ViT implementation based on the followings:  
 - [origin](https://github.com/google-research/vision_transformer)  
 - [scratch](https://github.com/tintn/vision-transformer-from-scratch/tree/main)  
+- [original source for sample dataset](https://pytorch.org/tutorials/beginner/data_loading_tutorial.html?highlight=dataloader)  
 
 # Note
 This repository is under construction and will be officially released by [Mizuno group](https://github.com/mizuno-group).  
@@ -21,13 +22,13 @@ Please contact tadahaya[at]gmail.com before publishing your paper using the cont
     └── ihvit               <- Source code for use in this project.
         ├── __init__.py     <- Makes src a Python module
         │
-        ├── main.py         <- a CLI module
+        ├── main.py         <- main CLI for this module
         │
-        ├── ihvit.py        <- a python module
+        ├── ihvit.py         <- a Python module
         │
-        ├── config.yaml     <- the default config file
+        ├── src             <- src for this module  
         │
-        └── src             <- main src for this module
+        └── data            <- a sample data and config file
 
 ------------
 
