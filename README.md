@@ -13,22 +13,22 @@ Please contact tadahaya[at]gmail.com before publishing your paper using the cont
 
     ├── LICENSE  
     ├── README.md           <- The top-level README for developers using this project  
-    │
-    ├── requirements.txt    <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
-    │
-    ├── setup.py            <- makes project pip installable (pip install -e .) so src can be imported
-    │
-    └── ihvit               <- Source code for use in this project.
-        ├── __init__.py     <- Makes src a Python module
-        │
-        ├── main.py         <- main CLI for this module
-        │
-        ├── ihvit.py         <- a Python module
-        │
-        ├── src             <- src for this module  
-        │
-        └── data            <- a sample data and config file
+    │  
+    ├── requirements.txt    <- The requirements file for reproducing the analysis environment, e.g.  
+    │                         generated with `pip freeze > requirements.txt`  
+    │  
+    ├── setup.py            <- makes project pip installable (pip install -e .) so src can be imported  
+    │  
+    ├── data                <- a sample data and config file  
+    │  
+    └── ihvit               <- Source code for use in this project  
+        ├── __init__.py     <- Makes src a Python module  
+        │  
+        ├── main.py         <- main CLI for this module  
+        │  
+        ├── ihvit.py         <- a Python module  
+        │  
+        └── src             <- src for this module  
 
 ------------
 
