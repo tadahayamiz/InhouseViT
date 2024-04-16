@@ -133,16 +133,16 @@ class IhVit:
         return np.concatenate(preds)
 
 
-    def check_images(self, nrow:int=3, ncol:int=4, indices:list=[], output:str=""):
+    def check_images(self, indices:list=[], output:str="", nrow:int=3, ncol:int=4):
         """ check images """
         if self.input_path is None:
             raise ValueError("!! Give input_path !!")
         mydataset = prep_dataset(self.input_path)
-        visualize_images(mydataset, nrow, ncol, indices, output)
+        visualize_images(mydataset, indices, output, nrow, ncol)
  
 
     def get_attentions(
-        self, nrow:int=2, ncol:int=3, indices:list=[], output:str=""
+        self, indices:list=[], output:str="", nrow:int=2, ncol:int=3
         ):
         """
         visualize the attention of the images in the given dataset
@@ -154,6 +154,6 @@ class IhVit:
         if self.model is None:
             raise ValueError("!! fit or load_model first !!")
         visualize_attention(
-            self.model, mydataset, self.config, nrow, ncol,
-            indices, output, self.config["device"]
+            self.model, mydataset, self.config,
+            indices, output, nrow, ncol, self.config["device"]
             )

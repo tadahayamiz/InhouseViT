@@ -101,7 +101,7 @@ def plot_progress(
     plt.savefig(outdir + f'/progress_{ylabel}.tif', dpi=300, bbox_inches='tight')
 
 
-def visualize_images(mydataset, nrow:int=3, ncol:int=4, output:str="", indices:list=[]):
+def visualize_images(mydataset, indices:list=[], output:str="", nrow:int=3, ncol:int=4):
     """
     visualize the images in the given dataset
     
@@ -111,8 +111,6 @@ def visualize_images(mydataset, nrow:int=3, ncol:int=4, output:str="", indices:l
     num_vis = np.min((len(mydataset), nrow * ncol))
     if len(indices) == 0:
         indices = torch.randperm(len(mydataset))[:num_vis]
-    else:
-        indices = torch.tensor(indices)
     classes = mydataset.classes
     images = [np.asarray(mydataset[i][0]) for i in indices]
     labels = [mydataset[i][1] for i in indices]
@@ -129,8 +127,8 @@ def visualize_images(mydataset, nrow:int=3, ncol:int=4, output:str="", indices:l
 
 @torch.no_grad()
 def visualize_attention(
-    model, mydataset, config, nrow:int=2, ncol:int=3,
-    indices:list=list, output:str="", device="cuda"
+    model, mydataset, config, indices:list=[], output:str="", 
+    nrow:int=2, ncol:int=3, device="cuda"
     ):
     """
     visualize the attention of the images in the given dataset
@@ -142,8 +140,6 @@ def visualize_attention(
     num_vis = np.min((len(mydataset), nrow * ncol))
     if len(indices) == 0:
         indices = torch.randperm(len(mydataset))[:num_vis]
-    else:
-        indices = torch.tensor(indices)
     classes = mydataset.classes
     raw_images = [np.asarray(mydataset[i][0]) for i in indices]
     labels = [mydataset[i][1] for i in indices]
