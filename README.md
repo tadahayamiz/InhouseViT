@@ -26,7 +26,7 @@ Please contact tadahaya[at]gmail.com before publishing your paper using the cont
         │  
         ├── main.py         <- main CLI for this module  
         │  
-        ├── ihvit.py         <- a Python module  
+        ├── ihvit.py        <- a Python module  
         │  
         └── src             <- src for this module  
 
