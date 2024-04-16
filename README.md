@@ -18,10 +18,16 @@ Please contact tadahaya[at]gmail.com before publishing your paper using the cont
     │
     ├── setup.py            <- makes project pip installable (pip install -e .) so src can be imported
     │
-    └── module              <- Source code for use in this project.
+    └── ihvit               <- Source code for use in this project.
         ├── __init__.py     <- Makes src a Python module
         │
-        └── core.py         <- main src for this module
+        ├── main.py         <- a CLI module
+        │
+        ├── ihvit.py        <- a python module
+        │
+        ├── config.yaml     <- the default config file
+        │
+        └── src             <- main src for this module
 
 ------------
 
