@@ -4,6 +4,9 @@ Created on Tue Jul 23 12:09:08 2019
 
 ihvit module
 
+# ToDo 240509
+引数を新バージョンに代える
+
 @author: tadahaya
 """
 import torch

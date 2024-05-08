@@ -10,23 +10,25 @@ import json, os, math
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from torch import optim
+from torch import nn
 from torch.nn import functional as F
 import torchvision
 import torchvision.transforms as transforms
+import datetime
 
-from .models import VitForClassification
-
+# save and load functions
 def save_experiment(
-        experiment_name, config, model, train_losses, test_losses,
-        accuracies, classes, base_dir=""
+        experiment_name, base_dir, config, model,
+        train_losses, test_losses, accuracies
         ):
     """ save the experiment: config, model, metrics, and progress plot """
-    if len(base_dir) == 0:
-        base_dir = os.path.dirname(config["config_path"])
     outdir = os.path.join(base_dir, experiment_name)
     os.makedirs(outdir, exist_ok=True)
 
     # save config
+    now = datetime.datetime.now()
+    config["timestamp"] = now.strftime('%Y-%m-%d %H:%M:%S')
     configfile = os.path.join(outdir, 'config.json')
     with open(configfile, 'w') as f:
         json.dump(config, f, sort_keys=True, indent=4)
@@ -38,7 +40,6 @@ def save_experiment(
             'train_losses': train_losses,
             'test_losses': test_losses,
             'accuracies': accuracies,
-            'classes': classes,
         }
         json.dump(data, f, sort_keys=True, indent=4)
 
@@ -51,15 +52,21 @@ def save_experiment(
     save_checkpoint(experiment_name, model, "final", base_dir=base_dir)
 
 
-def save_checkpoint(experiment_name, model, epoch, base_dir="experiments"):
+def save_checkpoint(experiment_name, model, epoch, base_dir):
+    """
+    save the model
+    
+    # Trainerの中で走る
+    
+    """
     outdir = os.path.join(base_dir, experiment_name)
     os.makedirs(outdir, exist_ok=True)
     cpfile = os.path.join(outdir, f"model_{epoch}.pt")
     torch.save(model.state_dict(), cpfile)
 
 
-def load_experiments(
-        experiment_name, checkpoint_name="model_final.pt", base_dir="experiments"
+def load_experiment(
+        experiment_name, base_dir="experiments", checkpoint_name="model_final.pt"
         ):
     outdir = os.path.join(base_dir, experiment_name)
     # load config
@@ -73,12 +80,69 @@ def load_experiments(
     train_losses = data["train_losses"]
     test_losses = data["test_losses"]
     accuracies = data["accuracies"]
-    classes = data["classes"]
     # load model
-    model = VitForClassification(config)
     cpfile = os.path.join(outdir, checkpoint_name)
-    model.load_state_dict(torch.load(cpfile)) # checkpointを読み込んでから
-    return config, model, train_losses, test_losses, accuracies, classes
+    return config, cpfile, train_losses, test_losses, accuracies
+
+
+# model preparation functions
+def make_optimizer(params, name, **kwargs):
+    """
+    make optimizer
+    
+    Parameters
+    ----------
+    params: model.parameters()
+    
+    name: str
+        optimizer name to be used
+        - "Adam"
+        - "SGD"
+        - "RMSprop"
+        - "Adadelta"
+        - "Adagrad"
+        - "AdamW"
+        - "SparseAdam"
+        - "Adamax"
+        - "ASGD"
+        - "LBFGS"
+        - "Rprop"
+    
+    """
+    return optim.__dict__[name](params, **kwargs)
+
+
+def make_loss_fn(name, **kwargs):
+    """
+    make loss function
+    
+    Parameters
+    ----------
+    name: str
+        loss function name to be used
+        - "CrossEntropyLoss"
+        - "MSELoss"
+        - "NLLLoss"
+        - "PoissonNLLLoss"
+        - "KLDivLoss"
+        - "BCELoss"
+        - "BCEWithLogitsLoss"
+        - "MarginRankingLoss"
+        - "HingeEmbeddingLoss"
+        - "MultiLabelMarginLoss"
+        - "SmoothL1Loss"
+        - "SoftMarginLoss"
+        - "MultiLabelSoftMarginLoss"
+        - "CosineEmbeddingLoss"
+        - "MultiMarginLoss"
+        - "TripletMarginLoss"
+        - "CTCLoss"
+        - "NLLLoss2d"
+        - "PoissonNLLLoss"
+        - "KLDivLoss"
+
+    """
+    return nn.__dict__[name](**kwargs)
 
 
 def plot_progress(

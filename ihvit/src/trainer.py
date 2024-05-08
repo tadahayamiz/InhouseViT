@@ -7,51 +7,56 @@ trainer
 @author: tadahaya
 """
 import torch
-
-from .utils import save_experiment, save_checkpoint, plot_progress
-
-# configの例
-# config = {
-#     "patch_size": 4, # Input image size: 32x32 -> 8x8 patches
-#     "hidden_size": 48,
-#     "num_hidden_layers": 4,
-#     "num_attention_heads": 4,
-#     "intermediate_size": 4 * 48, # 4 * hidden_size
-#     "hidden_dropout_prob": 0.0,
-#     "attention_probs_dropout_prob": 0.0, 
-#     "initializer_range": 0.02, 
-#     "image_size": 32,
-#     "num_classes": 10, # num_classes of CIFAR10
-#     "num_channels": 3,
-#     "qkv_bias": True,
-#     "use_faster_attention": True,
-# }
-
+from .utils import save_experiment, save_checkpoint, make_optimizer, make_loss_fn
 
 class Trainer:
-    def __init__(self, config, model, optimizer, loss_fn, exp_name, device):
-        self.config = config
-        self.model = model.to(device)
-        self.optimizer = optimizer
-        self.loss_fn = loss_fn
-        self.exp_name = exp_name
-        self.device = device
+    def __init__(self, model, config):
+        # config
+        default_config = {
+            "epochs": 20,
+            "exp_name": "experiment",
+            "base_dir": "./experiments/",
+            "save_model_every": 10,
+            "optimizer": {
+                "name": "AdamW",
+                "lr": 1e-3,
+                "weight_decay": 1e-2,
+            },
+            "loss_fn": {
+                "name": "CrossEntropyLoss",
+                "label_smoothing": 0.1,
+            },
+        }
+        self.cfg = {**default_config, **config} # merge the two dictionaries
+        # models
+        self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+        self.model = model.to(self.device)
+        self.optimizer = make_optimizer(self.model.parameters(), **self.cfg["optimizer"])
+        self.loss_fn = make_loss_fn(**self.cfg["loss_fn"])
 
 
-    def train(self, trainloader, testloader, classes:dict=None, save_model_evry_n_epochs=0):
+    def get_model(self):
+        return self.model
+    
+
+    def set_model(self, model):
+        self.model = model.to(self.device)
+        # update
+        self.optimizer = make_optimizer(
+            self.model.parameters(), **self.cfg["optimizer"]
+            )
+        self.loss_fn = make_loss_fn(**self.cfg["loss_fn"])
+
+
+    def train(self, trainloader, testloader):
         """
         train the model for the specified number of epochs.
         
         """
-        # configの確認
-        config = self.config
-        assert config["hidden_size"] % config["num_attention_heads"] == 0
-        assert config["intermediate_size"] == 4 * config["hidden_size"]
-        assert config["image_size"] % config["patch_size"] == 0
         # keep track of the losses and accuracies
         train_losses, test_losses, accuracies = [], [], []
         # training
-        for i in range(config["epochs"]):
+        for i in range(self.cfg["epochs"]):
             train_loss = self.train_epoch(trainloader)
             accuracy, test_loss = self.evaluate(testloader)
             train_losses.append(train_loss)
@@ -60,13 +65,9 @@ class Trainer:
             print(
                 f"Epoch: {i + 1}, Train_loss: {train_loss:.4f}, Test loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}"
                 )
-            if save_model_evry_n_epochs > 0 and (i + 1) % save_model_evry_n_epochs == 0 and i + 1 != config["epochs"]:
+            if self.cfg["save_model_every"] > 0 and (i + 1) % self.cfg["save_model_every"] == 0 and i + 1 != self.cfg["epochs"]:
                 print("> Save checkpoint at epoch", i + 1)
-                save_checkpoint(self.exp_name, self.model, i + 1)
-        # save the experiment
-        save_experiment(
-            self.exp_name, config, self.model, train_losses, test_losses, accuracies, classes
-            )
+                save_checkpoint(self.cfg["exp_name"], self.model, i + 1, self.cfg["base_dir"])
 
 
     def train_epoch(self, trainloader):
